@@ -1,0 +1,200 @@
+# TFE Load Test Analysis Thresholds Configuration
+#
+# This file defines performance thresholds for analyzing load test results.
+# Thresholds are used to determine if a test passes or fails.
+
+# Global thresholds for all operations
+global:
+  # Response time thresholds (in milliseconds)
+  response_time:
+    p50:
+      good: 100      # < 100ms is excellent
+      acceptable: 300  # 100-300ms is acceptable
+      # > 300ms is poor
+    p95:
+      good: 500      # < 500ms is excellent
+      acceptable: 1000 # 500-1000ms is acceptable
+      # > 1000ms is poor
+    p99:
+      good: 1000     # < 1000ms is excellent
+      acceptable: 2000 # 1000-2000ms is acceptable
+      # > 2000ms is poor
+  
+  # Error rate thresholds (percentage)
+  error_rate:
+    good: 1.0        # < 1% is excellent
+    acceptable: 5.0  # 1-5% is acceptable
+    # > 5% is poor
+  
+  # Throughput thresholds (requests per second)
+  throughput:
+    good: 10         # > 10 req/s is excellent
+    acceptable: 5    # 5-10 req/s is acceptable
+    # < 5 req/s is poor
+
+# Operation-specific thresholds (override global)
+operations:
+  # Workspace operations
+  workspace_create:
+    response_time:
+      p95:
+        good: 1000
+        acceptable: 2000
+    error_rate:
+      good: 0.5
+      acceptable: 2.0
+  
+  workspace_list:
+    response_time:
+      p95:
+        good: 500
+        acceptable: 1000
+    error_rate:
+      good: 0.5
+      acceptable: 2.0
+  
+  workspace_delete:
+    response_time:
+      p95:
+        good: 800
+        acceptable: 1500
+    error_rate:
+      good: 1.0
+      acceptable: 3.0
+  
+  # Run operations
+  run_create:
+    response_time:
+      p95:
+        good: 1500
+        acceptable: 3000
+    error_rate:
+      good: 1.0
+      acceptable: 3.0
+  
+  run_status:
+    response_time:
+      p95:
+        good: 300
+        acceptable: 800
+    error_rate:
+      good: 0.5
+      acceptable: 2.0
+  
+  # State operations
+  state_upload:
+    response_time:
+      p95:
+        good: 2000
+        acceptable: 5000
+    error_rate:
+      good: 1.0
+      acceptable: 3.0
+  
+  state_download:
+    response_time:
+      p95:
+        good: 1000
+        acceptable: 3000
+    error_rate:
+      good: 1.0
+      acceptable: 30.0  # Higher tolerance for local dev (MinIO limitation)
+  
+  state_list:
+    response_time:
+      p95:
+        good: 500
+        acceptable: 1000
+    error_rate:
+      good: 0.5
+      acceptable: 2.0
+
+# TFE-specific metrics thresholds (from Grafana)
+tfe_metrics:
+  # Workspace metrics
+  workspace_count:
+    max_total: 10000  # Alert if > 10k workspaces
+  
+  # Run queue metrics
+  run_queue_depth:
+    good: 5           # < 5 runs in queue is good
+    acceptable: 20    # 5-20 runs is acceptable
+    # > 20 runs is concerning
+  
+  # Database metrics
+  database:
+    active_connections:
+      good: 50
+      acceptable: 100
+      # > 100 connections is concerning
+    
+    transaction_rate:
+      commits_per_sec:
+        good: 100
+        acceptable: 50
+      rollbacks_per_sec:
+        good: 1
+        acceptable: 5
+
+# Report configuration
+report:
+  # Include sections in reports
+  include:
+    summary: true
+    detailed_metrics: true
+    grafana_metrics: true
+    recommendations: true
+    historical_comparison: false  # Not implemented yet
+  
+  # Pass/fail criteria
+  pass_criteria:
+    # Test passes if ALL of these are met:
+    - metric: "global.error_rate"
+      threshold: "acceptable"
+      required: true
+    
+    - metric: "global.response_time.p95"
+      threshold: "acceptable"
+      required: true
+  
+  # Test fails if ANY of these are met:
+  fail_criteria:
+    - metric: "global.error_rate"
+      condition: ">"
+      value: 10.0  # > 10% error rate = automatic fail
+    
+    - metric: "global.response_time.p99"
+      condition: ">"
+      value: 5000  # > 5s p99 = automatic fail
+
+# Grafana configuration
+grafana:
+  # Default Grafana connection (can be overridden via CLI)
+  url: "http://localhost:3000"
+  # API key should be provided via environment variable: GRAFANA_API_KEY
+  
+  # Metrics to fetch
+  queries:
+    - name: "tfe_workspaces_total"
+      query: "tfe_workspaces_total"
+      description: "Total number of workspaces"
+    
+    - name: "tfe_run_queue_depth"
+      query: "tfe_run_queue_depth"
+      description: "Number of runs in queue"
+    
+    - name: "tfe_api_request_duration_p95"
+      query: "histogram_quantile(0.95, rate(tfe_api_request_duration_seconds_bucket[5m]))"
+      description: "API request duration (p95)"
+    
+    - name: "tfe_api_errors_total"
+      query: "rate(tfe_api_errors_total[5m])"
+      description: "API error rate"
+    
+    - name: "pg_active_connections"
+      query: "pg_stat_database_numbackends{datname='tfe'}"
+      description: "Active database connections"
+    
+    - name: "pg_transaction_rate"
+      query: "rate(pg_stat_database_xact_commit{datname='tfe'}[5m])"
+      description: "Database transaction commit rate"

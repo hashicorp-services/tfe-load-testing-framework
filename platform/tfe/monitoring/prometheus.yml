@@ -1,0 +1,59 @@
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+  external_labels:
+    cluster: 'tfe-load-testing'
+    environment: 'local'
+
+scrape_configs:
+  # TFE Custom Exporter - API metrics
+  - job_name: 'tfe-exporter'
+    static_configs:
+      - targets: ['tfe-exporter:9101']
+        labels:
+          service: 'tfe'
+          component: 'api'
+
+  # PostgreSQL Database Metrics
+  - job_name: 'postgres'
+    static_configs:
+      - targets: ['postgres-exporter:9187']
+        labels:
+          service: 'postgres'
+          component: 'database'
+
+  # Prometheus self-monitoring
+  - job_name: 'prometheus'
+    static_configs:
+      - targets: ['localhost:9090']
+        labels:
+          service: 'prometheus'
+          component: 'monitoring'
+
+  # MinIO metrics (if available)
+  - job_name: 'minio'
+    metrics_path: /minio/v2/metrics/cluster
+    static_configs:
+      - targets: ['minio:9000']
+        labels:
+          service: 'minio'
+          component: 'storage'
+
+
+  # Node Exporter - Podman VM system metrics
+  - job_name: 'node-exporter'
+    static_configs:
+      - targets: ['node-exporter:9100']
+        labels:
+          service: 'node-exporter'
+          component: 'system'
+          host: 'podman-vm'
+
+  # Node Exporter - macOS Host system metrics
+  - job_name: 'macos-host'
+    static_configs:
+      - targets: ['host.containers.internal:9100']
+        labels:
+          service: 'node-exporter'
+          component: 'system'
+          host: 'macos'

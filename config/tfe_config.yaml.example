@@ -1,0 +1,170 @@
+# TFE Load Testing Configuration Template
+#
+# Copy this file to tfe_config.yaml and update with your TFE instance details.
+# DO NOT commit tfe_config.yaml to version control - it contains sensitive data.
+
+# TFE Instance Configuration
+tfe:
+  # TFE hostname (without https://)
+  # Examples:
+  #   - app.terraform.io (for Terraform Cloud)
+  #   - tfe.example.com (for self-hosted TFE)
+  #   - tfe.localdemo.me (for local development)
+  hostname: "tfe.localdemo.me"
+  
+  # TFE API token
+  # Generate from: User Settings > Tokens or Team Settings > Tokens
+  # Can also be set via TFE_TOKEN environment variable
+  token: "${TFE_TOKEN}"
+  
+  # Default organization name
+  # Can also be set via TFE_ORGANIZATION environment variable
+  organization: "my-org"
+  
+  # SSL certificate verification
+  # Set to false for self-signed certificates (local development)
+  verify_ssl: false
+  
+  # Request timeout in seconds
+  timeout: 30
+  
+  # Maximum retries for failed requests
+  max_retries: 3
+
+# Load Test Configuration
+load_test:
+  # Number of concurrent users to simulate
+  users: 10
+  
+  # Rate at which users are spawned (users per second)
+  spawn_rate: 2
+  
+  # Test duration (examples: "5m", "1h", "30s")
+  # Leave empty for manual stop
+  run_time: "5m"
+  
+  # Web UI configuration
+  web_ui:
+    # Host for Locust web interface
+    host: "0.0.0.0"
+    
+    # Port for Locust web interface
+    port: 8089
+  
+  # Cleanup configuration
+  cleanup:
+    # Whether to delete created resources after test
+    enabled: true
+    
+    # Whether to cleanup on test failure
+    cleanup_on_failure: false
+
+# Scenario-Specific Configuration
+scenarios:
+  # Workspace Operations Scenario
+  workspace_operations:
+    # Task weights (higher = more frequent)
+    task_weights:
+      create_workspace: 10
+      list_workspaces: 5
+      get_workspace_details: 3
+      delete_workspace: 2
+    
+    # Wait time between tasks (seconds)
+    wait_time:
+      min: 2
+      max: 5
+    
+    # Workspace naming pattern
+    workspace_prefix: "loadtest"
+  
+  # Configuration Upload Scenario (future)
+  configuration_upload:
+    # Configuration file sizes to test
+    config_sizes:
+      - small: "1KB"
+      - medium: "100KB"
+      - large: "10MB"
+    
+    # Auto-queue runs after upload
+    auto_queue_runs: false
+  
+  # Run Operations Scenario (future)
+  run_operations:
+    # Run timeout in seconds
+    run_timeout: 300
+    
+    # Polling interval in seconds
+    poll_interval: 10
+    
+    # Auto-apply runs
+    auto_apply: false
+
+# Monitoring Configuration
+monitoring:
+  # Enable Prometheus metrics export
+  prometheus_enabled: true
+  
+  # Prometheus metrics port
+  prometheus_port: 9646
+  
+  # Custom metrics to track
+  custom_metrics:
+    - workspace_creation_time
+    - run_queue_depth
+    - api_error_rate
+
+# Logging Configuration
+logging:
+  # Log level (DEBUG, INFO, WARNING, ERROR, CRITICAL)
+  level: "INFO"
+  
+  # Log format
+  format: "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+  
+  # Log to file
+  file:
+    enabled: true
+    path: "logs/tfe_load_test.log"
+    max_bytes: 10485760  # 10MB
+    backup_count: 5
+  
+  # Log to console
+  console:
+    enabled: true
+    colored: true
+
+# Reporting Configuration
+reporting:
+  # Generate HTML report
+  html_report:
+    enabled: true
+    path: "reports/load_test_report.html"
+  
+  # Generate CSV report
+  csv_report:
+    enabled: true
+    path: "reports/load_test_stats.csv"
+  
+  # Include charts in report
+  include_charts: true
+  
+  # Report title
+  title: "TFE Load Test Report"
+
+# Advanced Configuration
+advanced:
+  # Connection pool size
+  connection_pool_size: 10
+  
+  # Enable request/response logging (verbose)
+  debug_requests: false
+  
+  # Custom headers to include in all requests
+  custom_headers: {}
+  
+  # Proxy configuration (if needed)
+  proxy:
+    enabled: false
+    http: ""
+    https: ""
