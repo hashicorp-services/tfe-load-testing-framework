@@ -1,0 +1,68 @@
+# Environment variables with sensitive data
+.env
+platform/tfe/.env
+
+# TLS certificates
+certs/
+platform/tfe/certs/*.pem
+platform/tfe/certs/*.key
+platform/tfe/certs/*.crt
+!platform/tfe/certs/.gitkeep
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# Virtual environments
+venv/
+ENV/
+env/
+.venv
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Locust
+locust.log
+
+# Test results
+.pytest_cache/
+.coverage
+htmlcov/
+*.log
+reports/
+
+# Docker volumes data (if mounted locally)
+postgres-data/
+minio-data/
+prometheus-data/
+grafana-data/
+
+# Bob
+.bob/
