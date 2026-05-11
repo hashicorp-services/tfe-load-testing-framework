@@ -18,7 +18,7 @@ This framework provides:
 
 ### Prerequisites
 
-- Python 3.8 or higher
+- Python 3.11 or higher
 - TFE instance (local or remote)
 - TFE API token
 - TFE organization
@@ -453,5 +453,5 @@ Contributions are welcome! Please:
 
 ---
 
-**Status**: Initial implementation complete - ready for testing  
-**Last Updated**: 2026-05-07
+**Status**: Production ready with documented limitations  
+**Last Updated**: 2026-05-11

@@ -123,6 +123,6 @@ This allows you to:
 
 ---
 
-**Last Updated:** 2026-05-07  
+**Last Updated:** 2026-05-11  
 **Affects:** Local development environment only  
 **Severity:** Low (workaround available, production unaffected)
