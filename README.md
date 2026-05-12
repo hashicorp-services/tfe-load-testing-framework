@@ -400,7 +400,7 @@ Contributions are welcome! Please:
 
 ## 📝 License
 
-[License information to be added]
+This project is licensed under the IBM Public License Version 1.0 - see the [LICENSE](LICENSE) file for details.
 
 ## 🆘 Troubleshooting
 

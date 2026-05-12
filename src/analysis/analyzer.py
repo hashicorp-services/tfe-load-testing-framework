@@ -1,3 +1,6 @@
+# Copyright (c) 2026 IBM Corporation
+# SPDX-License-Identifier: IPL-1.0
+
 """
 Load Test Analyzer - Core analysis logic with pass/fail criteria.
 
@@ -396,12 +399,19 @@ class LoadTestAnalyzer:
     def _generate_recommendations(self, result: AnalysisResult):
         """Generate recommendations based on analysis."""
         recommendations = []
+        seen_recommendations = set()
+
+        def add_recommendation(message: str):
+            """Add a recommendation once while preserving order."""
+            if message not in seen_recommendations:
+                recommendations.append(message)
+                seen_recommendations.add(message)
         
         # Check for high error rates
         for eval_result in result.evaluations:
             if 'error rate' in eval_result.metric_name.lower():
                 if eval_result.threshold_level == ThresholdLevel.POOR:
-                    recommendations.append(
+                    add_recommendation(
                         f"🔴 High error rate detected in {eval_result.metric_name}. "
                         "Investigate application logs and error responses."
                     )
@@ -410,7 +420,7 @@ class LoadTestAnalyzer:
         for eval_result in result.evaluations:
             if 'response time' in eval_result.metric_name.lower():
                 if eval_result.threshold_level == ThresholdLevel.POOR:
-                    recommendations.append(
+                    add_recommendation(
                         f"🔴 Slow response times in {eval_result.metric_name}. "
                         "Consider scaling TFE resources or optimizing database queries."
                     )
@@ -419,7 +429,7 @@ class LoadTestAnalyzer:
         for eval_result in result.evaluations:
             if 'queue depth' in eval_result.metric_name.lower():
                 if eval_result.threshold_level == ThresholdLevel.POOR:
-                    recommendations.append(
+                    add_recommendation(
                         "🔴 High run queue depth. Consider increasing TFE worker capacity."
                     )
         
@@ -427,20 +437,20 @@ class LoadTestAnalyzer:
         for eval_result in result.evaluations:
             if 'database' in eval_result.metric_name.lower():
                 if eval_result.threshold_level == ThresholdLevel.POOR:
-                    recommendations.append(
+                    add_recommendation(
                         "🔴 High database connection count. "
                         "Review connection pooling settings and database capacity."
                     )
         
         # General recommendations
         if result.overall_score < 70:
-            recommendations.append(
+            add_recommendation(
                 "⚠️  Overall performance is below acceptable levels. "
                 "Consider reviewing TFE infrastructure capacity and configuration."
             )
         
         if not recommendations:
-            recommendations.append(
+            add_recommendation(
                 "✅ All metrics within acceptable thresholds. No immediate action required."
             )
         
