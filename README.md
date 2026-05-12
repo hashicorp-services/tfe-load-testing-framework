@@ -252,11 +252,11 @@ The framework includes a comprehensive analysis tool that evaluates test results
 
 **Example: Test Results Within Thresholds**
 
-![Test Results Within Thresholds](docs/screenshots/results-within-thresholds.png)
+![Test Results Within Thresholds](docs/screenshots/results-exceeding-thresholds.png)
 
 **Example: Test Results Exceeding Thresholds**
 
-![Test Results Exceeding Thresholds](docs/screenshots/results-exceeding-thresholds.png)
+![Test Results Exceeding Thresholds](docs/screenshots/results-within-thresholds.png)
 
 See [docs/ANALYSIS_TOOL.md](docs/ANALYSIS_TOOL.md) for complete documentation.
 
