@@ -250,6 +250,14 @@ The framework includes a comprehensive analysis tool that evaluates test results
 - 📄 Beautiful HTML reports with charts
 - 🤖 CI/CD ready with exit codes
 
+**Example: Test Results Within Thresholds**
+
+![Test Results Within Thresholds](docs/screenshots/results-within-thresholds.png)
+
+**Example: Test Results Exceeding Thresholds**
+
+![Test Results Exceeding Thresholds](docs/screenshots/results-exceeding-thresholds.png)
+
 See [docs/ANALYSIS_TOOL.md](docs/ANALYSIS_TOOL.md) for complete documentation.
 
 ### Built-in Reports
