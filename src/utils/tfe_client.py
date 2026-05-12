@@ -232,7 +232,7 @@ class TFEClient:
             json_data=payload
         )
         response.raise_for_status()
-        return response.json()
+        return response.json()["data"]
     
     def get_workspace(self, workspace_id: str) -> Dict[str, Any]:
         """

@@ -121,6 +121,10 @@ if [[ -f ".env" ]]; then
     set -a
     source .env
     set +a
+    # Override HOST with TFE_HOSTNAME from .env if set
+    if [[ -n "$TFE_HOSTNAME" ]]; then
+        HOST="https://$TFE_HOSTNAME"
+    fi
 else
     echo -e "${YELLOW}⚠️  No .env file found. Using environment variables from shell.${NC}"
 fi
