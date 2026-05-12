@@ -69,7 +69,7 @@ class TFERunUser(HttpUser):
             name=workspace_name,
             auto_apply=True  # Enable auto-apply for end-to-end testing
         )
-        self.workspace_id = self.workspace['data']['id']
+        self.workspace_id = self.workspace['id']
         self.workspace_name = workspace_name
         
         print(f"User started with workspace: {workspace_name}")

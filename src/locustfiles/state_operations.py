@@ -70,7 +70,7 @@ class TFEStateUser(HttpUser):
         self.workspace = self.tfe.create_workspace(
             name=workspace_name
         )
-        self.workspace_id = self.workspace['data']['id']
+        self.workspace_id = self.workspace['id']
         self.workspace_name = workspace_name
         
         print(f"User started with workspace: {workspace_name}")
