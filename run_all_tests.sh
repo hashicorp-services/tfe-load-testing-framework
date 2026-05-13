@@ -240,11 +240,10 @@ run_test() {
         analysis_args+=("--no-grafana")
     fi
     
-    if [[ "$CI_MODE" == "true" ]]; then
-        analysis_args+=("--ci-mode")
-    fi
+    # Always use CI mode for proper exit codes
+    analysis_args+=("--ci-mode")
     
-    if ./analyze_results.py "${analysis_args[@]}"; then
+    if python analyze_results.py "${analysis_args[@]}"; then
         echo -e "${GREEN}✅ Analysis passed${NC}"
         TESTS_PASSED=$((TESTS_PASSED + 1))
     else
