@@ -19,9 +19,12 @@ This framework provides:
 ### Prerequisites
 
 - Python 3.11 or higher
+- [Task](https://taskfile.dev/) (recommended) - Install via: `brew install go-task/tap/go-task`
 - TFE instance (local or remote)
 - TFE API token
 - TFE organization
+
+> **💡 Tip:** This framework uses [Task](https://taskfile.dev/) as the primary task runner. While you can use direct commands, Task provides a simpler, more consistent interface. All examples below show both Task and direct command approaches.
 
 ### Installation
 
@@ -31,26 +34,51 @@ This framework provides:
    cd tfe-load-testing-framework
    ```
 
-2. **Create virtual environment**
+2. **Install Task (recommended)**
    ```bash
+   # macOS
+   brew install go-task/tap/go-task
+   
+   # Linux
+   sh -c "$(curl --location https://taskfile.dev/install.sh)" -- -d -b ~/.local/bin
+   
+   # Windows (via Scoop)
+   scoop install task
+   ```
+
+3. **Set up the environment**
+   ```bash
+   # Using Task (recommended)
+   task setup
+   
+   # Or manually
    python3 -m venv venv
    source venv/bin/activate  # On Windows: venv\Scripts\activate
-   ```
-
-3. **Install dependencies**
-   ```bash
    pip install -r requirements.txt
-   ```
-
-4. **Configure environment**
-   ```bash
    cp .env.example .env
    # Edit .env with your TFE credentials
    ```
 
 ### Running Your First Load Test
 
-**Option 1: Run all tests sequentially (recommended)**
+**Option 1: Using Task (recommended)**
+```bash
+# Run all test scenarios with analysis
+task test:all
+
+# Run individual test scenarios
+task test:workspace
+task test:runs
+task test:state
+
+# Run with custom parameters
+task test:workspace -- --users 50 --spawn-rate 5 --run-time 10m
+
+# Run with web UI for interactive testing
+task test:workspace-web
+```
+
+**Option 2: Run all tests sequentially**
 ```bash
 # Run all test scenarios with analysis
 ./run_all_tests.sh
@@ -64,7 +92,7 @@ This framework provides:
 
 See [docs/RUN_ALL_TESTS.md](docs/RUN_ALL_TESTS.md) for complete documentation.
 
-**Option 2: Run individual tests**
+**Option 3: Run individual tests with shell scripts**
 ```bash
 # Headless mode (automated run)
 ./examples/run_workspace_test.sh
@@ -73,7 +101,7 @@ See [docs/RUN_ALL_TESTS.md](docs/RUN_ALL_TESTS.md) for complete documentation.
 ./examples/run_workspace_test.sh web
 ```
 
-**Option 2: Direct Locust command**
+**Option 4: Direct Locust command**
 ```bash
 # Set environment variables
 export TFE_HOSTNAME=tfe.localdemo.me
@@ -226,6 +254,22 @@ cp config/tfe_config.yaml.example config/tfe_config.yaml
 
 The framework includes a comprehensive analysis tool that evaluates test results against configurable thresholds:
 
+**Using Task (recommended):**
+```bash
+# Analyze latest test results
+task analyze
+
+# Analyze specific test results
+task analyze -- --locust-stats reports/run_20260519_100606/test_stats.csv
+
+# Generate HTML report with Grafana metrics
+task analyze -- --grafana-url http://localhost:3000 --html-report reports/analysis.html
+
+# CI/CD mode (exit code 1 if test fails)
+task analyze:ci
+```
+
+**Direct command:**
 ```bash
 # Analyze test results with terminal report
 ./analyze_results.py --locust-stats reports/test_stats.csv --no-grafana
@@ -294,10 +338,41 @@ The framework integrates with the TFE monitoring stack (Prometheus + Grafana):
 
 ## 🏃 Running Tests
 
+### Using Task (Recommended)
+
+Task provides a simple, consistent interface for all test operations:
+
+```bash
+# Run all tests with default settings
+task test:all
+
+# Run individual test scenarios
+task test:workspace      # Workspace operations
+task test:runs          # Run operations
+task test:state         # State operations
+
+# Run with web UI for interactive testing (use shell scripts)
+./examples/run_workspace_test.sh web
+./examples/run_run_operations_test.sh web
+./examples/run_state_operations_test.sh web
+
+# Run with custom parameters
+task test:workspace -- --users 50 --spawn-rate 5 --run-time 10m
+
+# View all available test tasks
+task --list
+```
+
 ### Headless Mode (Automated)
 
 Best for CI/CD and automated testing:
 
+**Using Task:**
+```bash
+task test:workspace
+```
+
+**Direct Locust command:**
 ```bash
 locust -f src/locustfiles/workspace_operations.py \
     --host https://tfe.localdemo.me \
@@ -312,6 +387,12 @@ locust -f src/locustfiles/workspace_operations.py \
 
 Best for development and experimentation:
 
+**Using shell script:**
+```bash
+./examples/run_workspace_test.sh web
+```
+
+**Direct Locust command:**
 ```bash
 locust -f src/locustfiles/workspace_operations.py \
     --host https://tfe.localdemo.me \
@@ -327,24 +408,24 @@ Adjust users and spawn rate for different scenarios:
 
 **Light Load:**
 ```bash
---users 10 --spawn-rate 1 --run-time 5m
+task test:workspace -- --users 10 --spawn-rate 1 --run-time 5m
 ```
 
 **Medium Load:**
 ```bash
---users 50 --spawn-rate 5 --run-time 15m
+task test:workspace -- --users 50 --spawn-rate 5 --run-time 15m
 ```
 
 **Heavy Load:**
 ```bash
---users 200 --spawn-rate 10 --run-time 30m
+task test:workspace -- --users 200 --spawn-rate 10 --run-time 30m
 ```
 
 ## 🧰 Development
 
 ### Local TFE Setup
 
-For local development and testing, use the included TFE stack:
+For local development and testing, use the included TFE stack with Task:
 
 ```bash
 # Check prerequisites
@@ -357,17 +438,52 @@ cp platform/tfe/.env.example platform/tfe/.env
 # Generate certificates
 task generate-certs
 
-# Start TFE
+# Detect correct host alias IP (important for CLI-driven runs)
+task detect-host-alias-ip
+# Update TFE_HOST_ALIAS_IP in platform/tfe/.env with detected value
+
+# Verify configuration
+task check-tfe-env
+
+# Start TFE stack (includes monitoring)
 task tfe:up
 
-# Check health
+# Monitor startup logs
+task tfe:logs
+
+# Check health status
 task tfe:health
+
+# Stop TFE stack
+task tfe:down
+```
+
+**Additional TFE management tasks:**
+```bash
+# View all TFE-related tasks
+task --list | grep tfe
+
+# Get Podman socket path
+task podman-socket
+
+# Allow port 443 on macOS Podman machine
+task podman-machine-allow-443
 ```
 
 See [AGENTS.md](AGENTS.md) for detailed setup instructions.
 
 ### Running Tests
 
+**Using Task:**
+```bash
+# Run all tests
+task test
+
+# Run with coverage
+task test:coverage
+```
+
+**Direct commands:**
 ```bash
 # Unit tests
 pytest tests/
@@ -378,6 +494,22 @@ pytest --cov=src tests/
 
 ### Code Quality
 
+**Using Task:**
+```bash
+# Format code
+task fmt
+
+# Lint code
+task lint
+
+# Type checking
+task typecheck
+
+# Run all quality checks
+task check
+```
+
+**Direct commands:**
 ```bash
 # Format code
 black src/ tests/
@@ -420,17 +552,35 @@ This project is licensed under the IBM Public License Version 1.0 - see the [LIC
 
 **"Connection refused"**
 - Check TFE instance is running: `task tfe:health`
+- Check logs: `task tfe:logs`
 - Verify `TFE_HOSTNAME` is correct
 - For local TFE, ensure using `tfe.localdemo.me`
 
 **"SSL certificate verification failed"**
 - For local development, set `TFE_VERIFY_SSL=false`
+- Regenerate certificates: `task generate-certs`
 - For production, ensure valid SSL certificates
 
 **"Rate limit exceeded"**
 - Reduce `--users` or `--spawn-rate`
 - Add delays between requests
 - Use multiple API tokens
+
+**"Podman socket errors"**
+- Get correct socket path: `task podman-socket`
+- Update `PODMAN_SOCKET` in `platform/tfe/.env`
+- Ensure using rootful Podman (not rootless)
+
+**"Port 443 blocked (macOS Podman machine)"**
+- Run: `task podman-machine-allow-443`
+- Or use alternative: Set `TFE_HTTPS_PORT=8443` in `platform/tfe/.env`
+
+**"Host alias errors (CLI-driven runs fail)"**
+- Symptom: Archivist callbacks fail with connection errors
+- Detect correct IP: `task detect-host-alias-ip`
+- Update `TFE_HOST_ALIAS_IP` in `platform/tfe/.env`
+- macOS typical: `192.168.127.254`
+- Linux typical: `10.88.0.1`
 
 **"State download 401 errors (local dev only)"**
 - Symptom: State uploads work, but downloads fail with 401 Unauthorized
@@ -439,6 +589,26 @@ This project is licensed under the IBM Public License Version 1.0 - see the [LIC
 - Workaround: Test against production TFE instance for full functionality
 - Note: This is a known limitation of the local dev environment, not a code issue
 - All other operations (uploads, listing, API calls) work correctly at 100% success rate
+
+### Diagnostic Commands
+
+**Using Task (recommended):**
+```bash
+# Check all prerequisites
+task check-prereqs
+
+# Verify TFE environment configuration
+task check-tfe-env
+
+# View TFE logs
+task tfe:logs
+
+# Check TFE health
+task tfe:health
+
+# List all available tasks
+task --list
+```
 
 ### Getting Help
 
