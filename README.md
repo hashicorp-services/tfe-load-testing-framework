@@ -217,6 +217,63 @@ Tests state management and file handling:
 - Download specific version: 3
 - Upload large state: 2
 
+### 4. Sentinel Policy Evaluation (✅ Implemented)
+
+Tests Sentinel policy evaluation and enforcement:
+- **Policy pass scenarios** - Runs that pass policy checks
+- **Policy fail scenarios** - Runs that fail policy checks
+- **Policy override workflow** - Testing soft-mandatory policy overrides
+- **Multiple enforcement levels** - Advisory, soft-mandatory, hard-mandatory
+- **Policy check monitoring** - Tracking policy-stage wall time, engine duration when available, and outcomes
+
+**Run the test:**
+```bash
+# Recommended local/default run.
+# Uses loadtest-policies-synthetic-heavy, auto-created and kept idempotent.
+task test:sentinel -- --run-time=5m
+
+# Equivalent direct script call
+./examples/run_sentinel_policy_test.sh
+
+# Benchmark your own policy set instead of the synthetic sample policies
+export TFE_POLICY_SET_NAME=my-custom-policy-set
+./examples/run_sentinel_policy_test.sh
+
+# Use the lighter standard sample policies
+./examples/run_sentinel_policy_test.sh --policy-profile standard --policy-set loadtest-policies
+
+# Increase the synthetic workload when local policy stages complete too quickly
+./examples/run_sentinel_policy_test.sh --synthetic-resource-count 300 --heavy-policy-scan-count 150
+```
+
+**Policy Set Behavior:**
+- **Default (`loadtest-policies-synthetic-heavy`)**: Auto-created when missing and re-used on subsequent runs. It contains the standard sample policies plus a synthetic-heavy advisory policy.
+- **Standard (`loadtest-policies`)**: Available with `--policy-profile standard --policy-set loadtest-policies` for a lighter functional smoke test.
+- **Custom name**: Must already exist in TFE. Use this for representative customer benchmarking because real policy logic is more meaningful than synthetic calibration policies.
+
+**Auto-created policies include:**
+- Advisory policy (always passes, logs only)
+- Soft-mandatory policy (checks required tags, can be overridden)
+- Hard-mandatory policy (strict validation, cannot be overridden)
+- Synthetic-heavy advisory policy that repeatedly scans plan changes when `TFE_SENTINEL_POLICY_PROFILE=synthetic-heavy`
+
+**Primary Sentinel Performance Metric:**
+- `policy_stage_wall_time_ms` is the primary metric for load testing. It measures wall-clock policy-stage latency from TFE policy-check timestamps, with observed polling timestamps as a fallback.
+- It captures the user-visible policy stage: queueing, orchestration, policy evaluation, callback completion, and override progression when applicable.
+- TFE's API-reported Sentinel engine duration (`result.duration-ms` and nested Sentinel duration fields) is captured when non-zero, but local TFE and very small policies may return `0` for every engine-duration field.
+- A minimum of `0ms` can happen when TFE records start and terminal policy-check timestamps at the same timestamp granularity. Prefer p50/p95/p99 and max values for load-test interpretation.
+
+**Synthetic-heavy tuning:**
+- `TFE_SENTINEL_SYNTHETIC_RESOURCE_COUNT` controls Terraform plan size (default: 150, max: 500).
+- `TFE_SENTINEL_HEAVY_POLICY_SCAN_COUNT` controls repeated Sentinel plan scans (default: 80, max: 250).
+- Increase these values only for local calibration. For capacity planning, benchmark the target TFE deployment with representative customer policies.
+
+**Task Weights:**
+- Trigger run with policy pass: 10 (most frequent)
+- Monitor policy check status: 15
+- Trigger run with policy fail: 5
+- Override soft-mandatory policy: 3
+
 ## 🔧 Configuration
 
 ### Environment Variables
@@ -233,10 +290,37 @@ TFE_VERIFY_SSL=false  # Set to true for production
 # Test Configuration
 CLEANUP_WORKSPACES=true
 
-# Locust Settings
-LOCUST_USERS=10
+# Load Test Settings (SIMPLIFIED APPROACH)
+# Primary parameter: Control the actual load on TFE's run queue
+MAX_CONCURRENT_RUNS=20
+
+# Optional: Override automatic user calculation
+# If not set, users = max(5, MAX_CONCURRENT_RUNS * 0.5)
+# LOCUST_USERS=10
+
+# Other settings
 LOCUST_SPAWN_RATE=2
 LOCUST_RUN_TIME=5m
+
+# Sentinel policy load test settings
+# Default profile is synthetic-heavy to make local policy-stage timing observable.
+TFE_SENTINEL_POLICY_PROFILE=synthetic-heavy
+TFE_SENTINEL_SYNTHETIC_RESOURCE_COUNT=150
+TFE_SENTINEL_HEAVY_POLICY_SCAN_COUNT=80
+```
+
+**Simplified Configuration Approach:**
+- **`MAX_CONCURRENT_RUNS`**: Primary parameter that controls the number of users/workspaces
+- **`LOCUST_USERS`**: Automatically calculated as `max(5, MAX_CONCURRENT_RUNS)` if not specified (1:1 ratio)
+- **`LOCUST_SPAWN_RATE`**: Automatically calculated as `MAX_CONCURRENT_RUNS` for instant spawn
+- **Why?** Each user creates one workspace and can trigger multiple runs. TFE naturally manages the run queue based on its capacity.
+
+**Example:**
+```bash
+MAX_CONCURRENT_RUNS=20  # Creates 20 users with 20 workspaces
+# Users automatically set to 20 (1:1 ratio - each user manages one workspace)
+# Spawn rate automatically set to 20/s (all users start immediately)
+# TFE will queue and process runs based on its capacity
 ```
 
 ### YAML Configuration (Advanced)
@@ -348,8 +432,9 @@ task test:all
 
 # Run individual test scenarios
 task test:workspace      # Workspace operations
-task test:runs          # Run operations
+task test:run           # Run operations
 task test:state         # State operations
+task test:sentinel      # Sentinel policy evaluation
 
 # Run with web UI for interactive testing (use shell scripts)
 ./examples/run_workspace_test.sh web
@@ -404,22 +489,59 @@ Then open http://localhost:8089 in your browser.
 
 ### Custom Load Profiles
 
-Adjust users and spawn rate for different scenarios:
+Adjust `MAX_CONCURRENT_RUNS` for different scenarios (users and spawn_rate are calculated automatically):
 
 **Light Load:**
 ```bash
-task test:workspace -- --users 10 --spawn-rate 1 --run-time 5m
+# Test with 10 concurrent runs
+# Auto: 10 users, 10/s spawn rate
+MAX_CONCURRENT_RUNS=10 ./examples/run_run_operations_test.sh
 ```
 
 **Medium Load:**
 ```bash
-task test:workspace -- --users 50 --spawn-rate 5 --run-time 15m
+# Test with 50 concurrent runs
+# Auto: 50 users, 50/s spawn rate
+MAX_CONCURRENT_RUNS=50 LOCUST_RUN_TIME=15m ./examples/run_run_operations_test.sh
 ```
 
 **Heavy Load:**
 ```bash
-task test:workspace -- --users 200 --spawn-rate 10 --run-time 30m
+# Test with 100 concurrent runs
+# Auto: 100 users, 100/s spawn rate
+MAX_CONCURRENT_RUNS=100 LOCUST_RUN_TIME=30m ./examples/run_run_operations_test.sh
 ```
+
+**Advanced: Override automatic calculations:**
+```bash
+# Manually set concurrent runs, users, and spawn rate
+MAX_CONCURRENT_RUNS=20 LOCUST_USERS=15 LOCUST_SPAWN_RATE=5 ./examples/run_run_operations_test.sh
+```
+
+### TFE Capacity Configuration
+
+TFE limits concurrent run execution via `TFE_CAPACITY_CONCURRENCY`. Configure in `platform/tfe/.env`:
+
+```bash
+# Maximum concurrent runs TFE will execute
+# If not set, TFE uses its internal default (typically ~10 based on CPU cores)
+TFE_CAPACITY_CONCURRENCY=10   # Light load
+TFE_CAPACITY_CONCURRENCY=20   # Medium load
+TFE_CAPACITY_CONCURRENCY=50   # Heavy load (requires more resources)
+```
+
+**Restart TFE after changes:**
+```bash
+task tfe:restart
+```
+
+**Expected behavior:**
+- `MAX_CONCURRENT_RUNS=20` creates 20 workspaces
+- `TFE_CAPACITY_CONCURRENCY=10` limits to 10 simultaneous runs
+- Result: 10 runs executing, 10 runs queued (normal behavior)
+- **Without setting TFE_CAPACITY_CONCURRENCY:** TFE uses its internal default (~10)
+
+**Monitor queue depth in Grafana:** http://localhost:3000
 
 ## 🧰 Development
 
@@ -621,7 +743,9 @@ task --list
 - [x] Basic workspace operations scenario
 - [x] Run operations scenario
 - [x] State management scenario
+- [x] Sentinel policy evaluation scenario
 - [x] Enhanced monitoring with system metrics (node-exporter)
+- [x] Concurrent runs configuration parameter
 - [ ] VCS integration scenario
 - [ ] Variable management scenario
 - [ ] Team and permissions scenario

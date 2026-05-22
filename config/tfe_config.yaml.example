@@ -33,15 +33,28 @@ tfe:
 
 # Load Test Configuration
 load_test:
-  # Number of concurrent users to simulate
-  users: 10
+  # SIMPLIFIED APPROACH: Use max_concurrent_runs as the primary parameter
+  # This controls the number of users/workspaces created for the test
+  # Each user creates one workspace and can trigger multiple runs on it
+  # TFE naturally manages the run queue based on its capacity
+  # 
+  # The number of Locust users and spawn rate are automatically calculated:
+  # Formula: users = max(5, max_concurrent_runs)
+  # Formula: spawn_rate = max_concurrent_runs (instant spawn)
+  # Example: max_concurrent_runs=20 → 20 users, 20 workspaces, 20/s spawn rate
+  max_concurrent_runs: 20
   
-  # Rate at which users are spawned (users per second)
-  spawn_rate: 2
+  # Advanced: Override automatic calculations (optional)
+  # Leave commented to use automatic calculation
+  # spawn_rate: 2
   
   # Test duration (examples: "5m", "1h", "30s")
   # Leave empty for manual stop
   run_time: "5m"
+  
+  # Advanced: Override automatic user calculation (optional)
+  # Leave commented to use automatic calculation
+  # users: 10
   
   # Web UI configuration
   web_ui:
@@ -89,7 +102,7 @@ scenarios:
     # Auto-queue runs after upload
     auto_queue_runs: false
   
-  # Run Operations Scenario (future)
+  # Run Operations Scenario
   run_operations:
     # Run timeout in seconds
     run_timeout: 300
@@ -99,6 +112,44 @@ scenarios:
     
     # Auto-apply runs
     auto_apply: false
+  
+  # Sentinel Policy Evaluation Scenario
+  sentinel_policies:
+    # Enable Sentinel policy testing
+    enabled: false
+    
+    # Policy set name to use for testing.
+    # Default sample policy sets are auto-created/reused by the sentinel script.
+    # Custom policy set names must already exist in TFE.
+    policy_set_name: "loadtest-policies-synthetic-heavy"
+
+    # Policy profile for auto-created local policy sets:
+    # - standard: advisory, soft-mandatory, hard-mandatory sample policies
+    # - synthetic-heavy: standard policies plus a repeated plan-scan policy for local policy-stage calibration
+    policy_profile: "synthetic-heavy"
+    # Synthetic-heavy tuning:
+    # - synthetic_resource_count controls Terraform plan size (max: 500)
+    # - heavy_policy_scan_count controls repeated Sentinel plan scans (max: 250)
+    synthetic_resource_count: 150
+    heavy_policy_scan_count: 80
+    
+    # Policy enforcement levels to test
+    enforcement_levels:
+      - advisory    # Warnings only, runs can proceed
+      - soft-mandatory  # Can be overridden
+      - hard-mandatory  # Cannot be overridden
+    
+    # Test policy outcomes
+    test_outcomes:
+      - pass      # Policies that should pass
+      - fail      # Policies that should fail
+      - override  # Test policy override workflow
+    
+    # Wait time for policy checks (seconds)
+    policy_check_timeout: 120
+    
+    # Polling interval for policy check status (seconds)
+    policy_check_poll_interval: 5
 
 # Monitoring Configuration
 monitoring:

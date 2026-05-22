@@ -27,6 +27,7 @@ import tarfile
 import io
 import random
 import uuid
+import threading
 from locust import HttpUser, task, between, events
 from src.utils.tfe_client import TFEClient
 
@@ -155,6 +156,7 @@ output "timestamp" {{
         Create a configuration version, upload config, and trigger a run.
         This is the most common workflow in TFE.
         """
+        run_id = None
         try:
             # Create configuration version using Locust client for metrics
             with self.client.post(
@@ -312,6 +314,7 @@ output "timestamp" {{
         """
         Monitor the status of existing runs.
         Simulates users checking on their run progress.
+        Releases run slot when run completes.
         """
         if not self.created_runs:
             return
@@ -352,125 +355,131 @@ output "timestamp" {{
         """
         Queue multiple runs to test queue depth handling.
         Simulates scenarios where multiple runs are triggered in quick succession.
+        Respects max_concurrent_runs limit.
         """
         try:
             num_runs = random.randint(2, 4)
             print(f"Queueing {num_runs} runs for workspace {self.workspace_name}")
             
             for i in range(num_runs):
-                # Create configuration version
-                with self.client.post(
-                    f"/api/v2/workspaces/{self.workspace_id}/configuration-versions",
-                    json={
-                        "data": {
-                            "type": "configuration-versions",
-                            "attributes": {"auto-queue-runs": False, "speculative": False}
-                        }
-                    },
-                    headers={
-                        "Authorization": f"Bearer {self.tfe.token}",
-                        "Content-Type": "application/vnd.api+json"
-                    },
-                    verify=self.tfe.verify_ssl,
-                    catch_response=True,
-                    name="/api/v2/workspaces/:id/configuration-versions [QUEUE]"
-                ) as response:
-                    if response.status_code != 201:
-                        response.failure(f"Failed to create config version: {response.status_code}")
-                        continue
-                    
-                    config_version = response.json()
-                    upload_url = config_version['data']['attributes']['upload-url']
-                    config_version_id = config_version['data']['id']
-                    response.success()
-                
-                # Upload config
-                config_data = self._create_terraform_config(resource_count=random.randint(2, 5))
-                with self.client.put(
-                    upload_url,
-                    data=config_data,
-                    headers={"Content-Type": "application/octet-stream"},
-                    verify=self.tfe.verify_ssl,
-                    catch_response=True,
-                    name="/configuration-versions/:id/upload [QUEUE]"
-                ) as response:
-                    if response.status_code != 200:
-                        response.failure(f"Failed to upload config: {response.status_code}")
-                        continue
-                    response.success()
-                
-                # Wait for configuration version to be uploaded
-                max_retries = 20
-                config_uploaded = False
-                for retry in range(max_retries):
-                    with self.client.get(
-                        f"/api/v2/configuration-versions/{config_version_id}",
+                run_id = None
+                try:
+                    # Create configuration version
+                    with self.client.post(
+                        f"/api/v2/workspaces/{self.workspace_id}/configuration-versions",
+                        json={
+                            "data": {
+                                "type": "configuration-versions",
+                                "attributes": {"auto-queue-runs": False, "speculative": False}
+                            }
+                        },
                         headers={
                             "Authorization": f"Bearer {self.tfe.token}",
                             "Content-Type": "application/vnd.api+json"
                         },
                         verify=self.tfe.verify_ssl,
                         catch_response=True,
-                        name="/api/v2/configuration-versions/:id [STATUS-CHECK-QUEUE]"
-                    ) as cv_response:
-                        if cv_response.status_code == 200:
-                            cv_data = cv_response.json()
-                            status = cv_data['data']['attributes']['status']
-                            cv_response.success()
-                            if status == 'uploaded':
-                                config_uploaded = True
+                        name="/api/v2/workspaces/:id/configuration-versions [QUEUE]"
+                    ) as response:
+                        if response.status_code != 201:
+                            response.failure(f"Failed to create config version: {response.status_code}")
+                            continue
+                        
+                        config_version = response.json()
+                        upload_url = config_version['data']['attributes']['upload-url']
+                        config_version_id = config_version['data']['id']
+                        response.success()
+                    
+                    # Upload config
+                    config_data = self._create_terraform_config(resource_count=random.randint(2, 5))
+                    with self.client.put(
+                        upload_url,
+                        data=config_data,
+                        headers={"Content-Type": "application/octet-stream"},
+                        verify=self.tfe.verify_ssl,
+                        catch_response=True,
+                        name="/configuration-versions/:id/upload [QUEUE]"
+                    ) as response:
+                        if response.status_code != 200:
+                            response.failure(f"Failed to upload config: {response.status_code}")
+                            continue
+                        response.success()
+                    
+                    # Wait for configuration version to be uploaded
+                    max_retries = 20
+                    config_uploaded = False
+                    for retry in range(max_retries):
+                        with self.client.get(
+                            f"/api/v2/configuration-versions/{config_version_id}",
+                            headers={
+                                "Authorization": f"Bearer {self.tfe.token}",
+                                "Content-Type": "application/vnd.api+json"
+                            },
+                            verify=self.tfe.verify_ssl,
+                            catch_response=True,
+                            name="/api/v2/configuration-versions/:id [STATUS-CHECK-QUEUE]"
+                        ) as cv_response:
+                            if cv_response.status_code == 200:
+                                cv_data = cv_response.json()
+                                status = cv_data['data']['attributes']['status']
+                                cv_response.success()
+                                if status == 'uploaded':
+                                    config_uploaded = True
+                                    break
+                                elif status == 'errored':
+                                    print(f"Config version {config_version_id} errored")
+                                    break
+                            else:
+                                cv_response.failure(f"Failed to check config version status: {cv_response.status_code}")
                                 break
-                            elif status == 'errored':
-                                print(f"Config version {config_version_id} errored")
-                                break
-                        else:
-                            cv_response.failure(f"Failed to check config version status: {cv_response.status_code}")
-                            break
-                    time.sleep(0.3)
-                
-                # Skip run creation if config version not uploaded
-                if not config_uploaded:
-                    print(f"Config version {config_version_id} not uploaded after {max_retries} retries, skipping run {i+1}/{num_runs}")
-                    continue
-                
-                # Create run
-                with self.client.post(
-                    "/api/v2/runs",
-                    json={
-                        "data": {
-                            "type": "runs",
-                            "attributes": {"message": f"Queued run {i+1}/{num_runs}"},
-                            "relationships": {
-                                "workspace": {"data": {"type": "workspaces", "id": self.workspace_id}},
-                                "configuration-version": {"data": {"type": "configuration-versions", "id": config_version_id}}
-                            }
-                        }
-                    },
-                    headers={
-                        "Authorization": f"Bearer {self.tfe.token}",
-                        "Content-Type": "application/vnd.api+json"
-                    },
-                    verify=self.tfe.verify_ssl,
-                    catch_response=True,
-                    name="/api/v2/runs [QUEUE]"
-                ) as response:
-                    if response.status_code != 201:
-                        error_detail = ""
-                        try:
-                            error_data = response.json()
-                            if 'errors' in error_data and len(error_data['errors']) > 0:
-                                error_detail = error_data['errors'][0].get('detail', '')
-                        except:
-                            pass
-                        response.failure(f"Failed to create run: {response.status_code} - {error_detail}")
-                        print(f"Queued run {i+1}/{num_runs} creation failed for workspace {self.workspace_name}: {response.status_code} - {error_detail}")
+                        time.sleep(0.3)
+                    
+                    # Skip run creation if config version not uploaded
+                    if not config_uploaded:
+                        print(f"Config version {config_version_id} not uploaded after {max_retries} retries, skipping run {i+1}/{num_runs}")
                         continue
                     
-                    run = response.json()
-                    run_id = run['data']['id']
-                    self.created_runs.append(run_id)
-                    response.success()
-                    print(f"Queued run {i+1}/{num_runs}: {run_id}")
+                    # Create run
+                    with self.client.post(
+                        "/api/v2/runs",
+                        json={
+                            "data": {
+                                "type": "runs",
+                                "attributes": {"message": f"Queued run {i+1}/{num_runs}"},
+                                "relationships": {
+                                    "workspace": {"data": {"type": "workspaces", "id": self.workspace_id}},
+                                    "configuration-version": {"data": {"type": "configuration-versions", "id": config_version_id}}
+                                }
+                            }
+                        },
+                        headers={
+                            "Authorization": f"Bearer {self.tfe.token}",
+                            "Content-Type": "application/vnd.api+json"
+                        },
+                        verify=self.tfe.verify_ssl,
+                        catch_response=True,
+                        name="/api/v2/runs [QUEUE]"
+                    ) as response:
+                        if response.status_code != 201:
+                            error_detail = ""
+                            try:
+                                error_data = response.json()
+                                if 'errors' in error_data and len(error_data['errors']) > 0:
+                                    error_detail = error_data['errors'][0].get('detail', '')
+                            except:
+                                pass
+                            response.failure(f"Failed to create run: {response.status_code} - {error_detail}")
+                            print(f"Queued run {i+1}/{num_runs} creation failed for workspace {self.workspace_name}: {response.status_code} - {error_detail}")
+                            continue
+                        
+                        run = response.json()
+                        run_id = run['data']['id']
+                        self.created_runs.append(run_id)
+                        response.success()
+                        print(f"Queued run {i+1}/{num_runs}: {run_id}")
+                
+                except Exception as e:
+                    print(f"Error creating queued run {i+1}/{num_runs}: {e}")
                 
         except Exception as e:
             print(f"Error queueing multiple runs: {e}")
@@ -480,6 +489,7 @@ output "timestamp" {{
         """
         Cancel a pending or running run.
         Simulates users canceling runs that are no longer needed.
+        Releases run slot when canceled.
         """
         if not self.created_runs:
             return

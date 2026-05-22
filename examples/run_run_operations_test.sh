@@ -46,13 +46,27 @@ if [ -z "$TFE_HOSTNAME" ] || [ -z "$TFE_TOKEN" ] || [ -z "$TFE_ORGANIZATION" ]; 
 fi
 
 # Set default values
-LOCUST_USERS=${LOCUST_USERS:-5}
-LOCUST_SPAWN_RATE=${LOCUST_SPAWN_RATE:-1}
+MAX_CONCURRENT_RUNS=${MAX_CONCURRENT_RUNS:-20}
 LOCUST_RUN_TIME=${LOCUST_RUN_TIME:-5m}
+
+# Calculate users automatically based on max_concurrent_runs
+# Formula: users = max(5, max_concurrent_runs)
+if [ -z "$LOCUST_USERS" ]; then
+    LOCUST_USERS=$((MAX_CONCURRENT_RUNS > 5 ? MAX_CONCURRENT_RUNS : 5))
+    echo -e "${GREEN}Auto-calculated users: $LOCUST_USERS (based on max_concurrent_runs=$MAX_CONCURRENT_RUNS)${NC}"
+fi
+
+# Calculate spawn_rate automatically based on max_concurrent_runs
+# Formula: spawn_rate = max_concurrent_runs (instant spawn)
+if [ -z "$LOCUST_SPAWN_RATE" ]; then
+    LOCUST_SPAWN_RATE=$MAX_CONCURRENT_RUNS
+    echo -e "${GREEN}Auto-calculated spawn_rate: $LOCUST_SPAWN_RATE/s (instant spawn)${NC}"
+fi
 
 echo -e "${YELLOW}Configuration:${NC}"
 echo "  TFE Hostname: $TFE_HOSTNAME"
 echo "  Organization: $TFE_ORGANIZATION"
+echo "  Max Concurrent Runs: $MAX_CONCURRENT_RUNS"
 echo "  Users: $LOCUST_USERS"
 echo "  Spawn Rate: $LOCUST_SPAWN_RATE/s"
 echo "  Run Time: $LOCUST_RUN_TIME"
@@ -89,7 +103,7 @@ echo ""
 # Run the load test
 # Note: Run operations take time (workspace creation, config upload, run execution)
 # Using longer timeout to allow test to complete naturally
-timeout 400 locust \
+MAX_CONCURRENT_RUNS=$MAX_CONCURRENT_RUNS timeout 400 locust \
     -f src/locustfiles/run_operations.py \
     --host=https://$TFE_HOSTNAME \
     --users=$LOCUST_USERS \

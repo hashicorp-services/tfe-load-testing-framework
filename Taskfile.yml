@@ -266,8 +266,16 @@ tasks:
           printf 'Error: run_all_tests.sh not found\n' >&2
           exit 1
         fi
+        if [ -f ".env" ]; then
+          set -a
+          . .env
+          set +a
+        fi
+        if [ -f "venv/bin/activate" ]; then
+          . venv/bin/activate
+        fi
         chmod +x run_all_tests.sh
-        ./run_all_tests.sh {{.CLI_ARGS}}
+        MAX_CONCURRENT_RUNS="${MAX_CONCURRENT_RUNS:-20}" ./run_all_tests.sh {{.CLI_ARGS}}
 
   test:workspace:
     desc: Run workspace operations load test
@@ -277,8 +285,16 @@ tasks:
           printf 'Error: run_all_tests.sh not found\n' >&2
           exit 1
         fi
+        if [ -f ".env" ]; then
+          set -a
+          . .env
+          set +a
+        fi
+        if [ -f "venv/bin/activate" ]; then
+          . venv/bin/activate
+        fi
         chmod +x run_all_tests.sh
-        ./run_all_tests.sh --skip-run --skip-state {{.CLI_ARGS}}
+        MAX_CONCURRENT_RUNS="${MAX_CONCURRENT_RUNS:-20}" ./run_all_tests.sh --skip-run --skip-state {{.CLI_ARGS}}
 
   test:run:
     desc: Run run operations load test
@@ -288,8 +304,16 @@ tasks:
           printf 'Error: run_all_tests.sh not found\n' >&2
           exit 1
         fi
+        if [ -f ".env" ]; then
+          set -a
+          . .env
+          set +a
+        fi
+        if [ -f "venv/bin/activate" ]; then
+          . venv/bin/activate
+        fi
         chmod +x run_all_tests.sh
-        ./run_all_tests.sh --skip-workspace --skip-state {{.CLI_ARGS}}
+        MAX_CONCURRENT_RUNS="${MAX_CONCURRENT_RUNS:-20}" ./run_all_tests.sh --skip-workspace --skip-state {{.CLI_ARGS}}
 
   test:state:
     desc: Run state operations load test
@@ -299,5 +323,32 @@ tasks:
           printf 'Error: run_all_tests.sh not found\n' >&2
           exit 1
         fi
+        if [ -f ".env" ]; then
+          set -a
+          . .env
+          set +a
+        fi
+        if [ -f "venv/bin/activate" ]; then
+          . venv/bin/activate
+        fi
         chmod +x run_all_tests.sh
-        ./run_all_tests.sh --skip-workspace --skip-run {{.CLI_ARGS}}
+        MAX_CONCURRENT_RUNS="${MAX_CONCURRENT_RUNS:-20}" ./run_all_tests.sh --skip-workspace --skip-run {{.CLI_ARGS}}
+
+  test:sentinel:
+    desc: Run Sentinel policy evaluation load test
+    cmds:
+      - |
+        if [ ! -f "examples/run_sentinel_policy_test.sh" ]; then
+          printf 'Error: examples/run_sentinel_policy_test.sh not found\n' >&2
+          exit 1
+        fi
+        if [ -f ".env" ]; then
+          set -a
+          . .env
+          set +a
+        fi
+        if [ -f "venv/bin/activate" ]; then
+          . venv/bin/activate
+        fi
+        chmod +x examples/run_sentinel_policy_test.sh
+        MAX_CONCURRENT_RUNS="${MAX_CONCURRENT_RUNS:-5}" ./examples/run_sentinel_policy_test.sh {{.CLI_ARGS}}

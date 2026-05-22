@@ -9,17 +9,21 @@
 #   ./run_all_tests.sh [options]
 #
 # Options:
-#   --users NUM          Number of concurrent users (default: 10)
-#   --spawn-rate NUM     User spawn rate per second (default: 2)
-#   --run-time TIME      Test duration (default: 5m)
-#   --host URL           TFE hostname (default: https://tfe.localdemo.me)
-#   --with-grafana       Include Grafana metrics in analysis
-#   --grafana-url URL    Grafana URL (default: http://localhost:3000)
-#   --skip-workspace     Skip workspace operations test
-#   --skip-run           Skip run operations test
-#   --skip-state         Skip state operations test
-#   --ci-mode            CI/CD mode (fail fast on first failure)
-#   --help               Show this help message
+#   --max-concurrent-runs NUM  Maximum concurrent runs (default: 20, auto-calculates users)
+#   --users NUM                Override automatic user calculation (optional)
+#   --spawn-rate NUM           User spawn rate per second (default: 2)
+#   --run-time TIME            Test duration (default: 5m)
+#   --host URL                 TFE hostname (default: https://tfe.localdemo.me)
+#   --with-grafana             Include Grafana metrics in analysis
+#   --grafana-url URL          Grafana URL (default: http://localhost:3000)
+#   --skip-workspace           Skip workspace operations test
+#   --skip-run                 Skip run operations test
+#   --skip-state               Skip state operations test
+#   --ci-mode                  CI/CD mode (fail fast on first failure)
+#   --help                     Show this help message
+#
+# Environment Variables:
+#   MAX_CONCURRENT_RUNS        Can also be set via environment (default: 20)
 
 set -e  # Exit on error
 
@@ -32,8 +36,9 @@ CYAN='\033[0;36m'
 NC='\033[0m' # No Color
 
 # Default configuration
-USERS=10
-SPAWN_RATE=2
+MAX_CONCURRENT_RUNS=${MAX_CONCURRENT_RUNS:-20}
+USERS=""  # Will be auto-calculated if not set
+SPAWN_RATE=""  # Will be auto-calculated if not set
 RUN_TIME="5m"
 HOST="https://tfe.localdemo.me"
 WITH_GRAFANA=false
@@ -46,6 +51,10 @@ CI_MODE=false
 # Parse command-line arguments
 while [[ $# -gt 0 ]]; do
     case $1 in
+        --max-concurrent-runs)
+            MAX_CONCURRENT_RUNS="$2"
+            shift 2
+            ;;
         --users)
             USERS="$2"
             shift 2
@@ -161,6 +170,18 @@ fi
 echo -e "${GREEN}✅ All required environment variables are set${NC}"
 echo ""
 
+# Auto-calculate users if not explicitly set
+if [[ -z "$USERS" ]]; then
+    USERS=$((MAX_CONCURRENT_RUNS > 5 ? MAX_CONCURRENT_RUNS : 5))
+    echo -e "${GREEN}🔧 Auto-calculated users: $USERS (based on max_concurrent_runs=$MAX_CONCURRENT_RUNS)${NC}"
+fi
+
+# Auto-calculate spawn_rate if not explicitly set
+if [[ -z "$SPAWN_RATE" ]]; then
+    SPAWN_RATE=$MAX_CONCURRENT_RUNS
+    echo -e "${GREEN}🔧 Auto-calculated spawn_rate: $SPAWN_RATE/s (instant spawn for max_concurrent_runs=$MAX_CONCURRENT_RUNS)${NC}"
+fi
+
 # Create reports directory
 mkdir -p reports
 
@@ -170,6 +191,7 @@ REPORT_DIR="reports/run_${TIMESTAMP}"
 mkdir -p "$REPORT_DIR"
 
 echo -e "${BLUE}📋 Test Configuration${NC}"
+echo "  Max Concurrent Runs: $MAX_CONCURRENT_RUNS"
 echo "  Users: $USERS"
 echo "  Spawn Rate: $SPAWN_RATE/s"
 echo "  Run Time: $RUN_TIME"
@@ -199,7 +221,7 @@ run_test() {
     # Run Locust test
     echo -e "${BLUE}🚀 Starting load test...${NC}"
     
-    if locust -f "$locustfile" \
+    if MAX_CONCURRENT_RUNS="$MAX_CONCURRENT_RUNS" locust -f "$locustfile" \
         --headless \
         --users "$USERS" \
         --spawn-rate "$SPAWN_RATE" \

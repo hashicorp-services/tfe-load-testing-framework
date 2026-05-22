@@ -392,11 +392,117 @@ class TFEUser(HttpUser):
 - No resource exhaustion
 - Stable performance over duration
 
+### Scenario 6: Sentinel Policy Evaluation (✅ Implemented)
+
+**Objective**: Test Sentinel policy evaluation performance and enforcement under load.
+
+This scenario creates workspaces, attaches a policy set, uploads Terraform configurations, queues runs, monitors policy checks, and exercises soft-mandatory override behavior.
+
+**Pattern**:
+```python
+@task(10)
+def trigger_run_with_policy_pass(self):
+    # Create compliant configuration
+    config_version_id = self._create_and_upload_config(policy_test_type="pass")
+    
+    # Create run that will undergo policy checks
+    run_response = self.client.post(
+        "/api/v2/runs",
+        json={
+            "data": {
+                "type": "runs",
+                "attributes": {"message": "Policy test (pass)"},
+                "relationships": {
+                    "workspace": {"data": {"type": "workspaces", "id": workspace_id}},
+                    "configuration-version": {"data": {"type": "configuration-versions", "id": config_version_id}}
+                }
+            }
+        }
+    )
+    
+    # Monitor policy check status
+    self.poll_policy_check_status(run_id)
+
+@task(5)
+def trigger_run_with_policy_fail(self):
+    # Create non-compliant configuration
+    config_version_id = self._create_and_upload_config(policy_test_type="fail")
+    # Trigger run and monitor policy failure
+
+@task(3)
+def override_soft_mandatory_policy(self):
+    # Test policy override workflow for soft-mandatory policies
+    self.client.post(f"/api/v2/runs/{run_id}/actions/override-policy")
+```
+
+**Load Profile**:
+- Users: 5-20 concurrent
+- Policy-stage wall time depends heavily on TFE worker capacity, run queue depth, policy complexity, and whether the policy set runs in legacy or agent-backed evaluation mode
+- Duration: 10-30 minutes
+- Policy enforcement levels: advisory, soft-mandatory, hard-mandatory
+
+**Prerequisites**:
+- Set `TFE_TOKEN`, `TFE_ORGANIZATION`, `TFE_HOSTNAME`, and `TFE_VERIFY_SSL` as with the other scenarios.
+- The default policy set is `loadtest-policies-synthetic-heavy`. It is auto-created when missing and re-used on subsequent runs.
+- Custom policy sets must already exist in TFE. Use a custom policy set when benchmarking real customer policy performance.
+
+**Policy Set Behavior**:
+- **Default (`loadtest-policies-synthetic-heavy`)**: Auto-created with synthetic-heavy sample policies
+  - Advisory policy (always passes, logs only)
+  - Soft-mandatory policy (checks required tags, can be overridden)
+  - Hard-mandatory policy (strict validation, cannot be overridden)
+  - Synthetic advisory policy that repeatedly scans Terraform plan changes
+  - Tune Terraform plan size with `TFE_SENTINEL_SYNTHETIC_RESOURCE_COUNT` (default: 150, max: 500)
+  - Tune repeated policy scans with `TFE_SENTINEL_HEAVY_POLICY_SCAN_COUNT` (default: 80, max: 250)
+- **Standard (`loadtest-policies`)**: Use `--policy-profile standard --policy-set loadtest-policies` for the lighter sample policies
+- **Custom name**: Must exist in TFE (for benchmarking your own policies)
+
+**Run Examples**:
+```bash
+# Default local calibration profile
+task test:sentinel -- --run-time=5m
+
+# Heavier local synthetic workload
+task test:sentinel -- --run-time=5m --synthetic-resource-count 300 --heavy-policy-scan-count 150
+
+# Customer/representative policy set
+TFE_POLICY_SET_NAME=my-customer-policy-set task test:sentinel -- --run-time=15m
+```
+
+**Success Criteria**:
+- Policy check completion rate > 99%
+- p95 `policy_stage_wall_time_ms` stays within the target agreed for the environment and load profile
+- Correct enforcement of hard-mandatory policies (no overrides)
+- Successful override of soft-mandatory policies when requested
+- No policy check timeouts
+- No setup failures for default policy/policy-set create-or-reuse operations
+
+**Monitored Metrics**:
+- `policy_stage_wall_time_ms`: primary wall-clock policy-stage latency metric
+- Policy engine duration when TFE reports non-zero `result.duration-ms` or nested Sentinel durations. Local TFE may report `0` for every engine-duration field, even when the policy stage itself is measurable.
+- Policy pass/fail rates
+- Policy override frequency
+- Run status distribution during policy checks
+
+**Result Interpretation**:
+- Use `policy_stage_wall_time_ms` p50, p95, p99, and max to assess user-visible policy-stage latency.
+- Use engine-duration metrics only when TFE returns non-zero values. Treat `Engine Duration: unavailable` as a known local/sample-policy limitation, not a Locust parsing failure.
+- A `0ms` minimum for `policy_stage_wall_time_ms` can occur when TFE records policy-check start and terminal timestamps at the same timestamp granularity. Percentiles are more useful than the minimum.
+- Synthetic-heavy policies are calibration tools. They are useful for creating measurable local policy stages, but they do not replace testing with real policy sets for capacity planning.
+
+**Policy Checks vs Policy Evaluations API**:
+- This scenario uses the [Policy Checks API](https://developer.hashicorp.com/terraform/enterprise/api-docs/policy-checks) because it is the Sentinel policy-check workflow exposed on runs.
+- HashiCorp's current API docs note that Policy Checks support Sentinel versions up to 0.40.x and recommend Policy Evaluations for newer workflows.
+- The [Policy Evaluations API](https://developer.hashicorp.com/terraform/cloud-docs/api-docs/policy-evaluations) exposes task-stage policy evaluations and policy-set outcomes with status timestamps and result counts. It is a future extension point for OPA/enhanced policy-set workflows, but it is not a direct replacement for Sentinel `result.duration-ms`.
+- For Sentinel load testing today, keep Policy Checks for Sentinel outcome data and use `policy_stage_wall_time_ms` as the primary performance metric.
+
+**Implementation**: `src/locustfiles/sentinel_policy_operations.py`
+
 ---
 
 ## Advanced Scenarios
 
-### Scenario 6: VCS Webhook Flood
+### Scenario 7: VCS Webhook Flood
 
 **Objective**: Test webhook processing capacity.
 
@@ -409,7 +515,7 @@ class TFEUser(HttpUser):
 - 100-500 webhooks/minute
 - Varied payload sizes
 
-### Scenario 7: API Rate Limit Testing
+### Scenario 8: API Rate Limit Testing
 
 **Objective**: Validate rate limiting behavior.
 
@@ -424,7 +530,7 @@ class TFEUser(HttpUser):
 // Rate limiting is implemented in admin API
 ```
 
-### Scenario 8: Long-Running Run Cancellation
+### Scenario 9: Long-Running Run Cancellation
 
 **Objective**: Test run cancellation under load.
 
@@ -433,7 +539,7 @@ class TFEUser(HttpUser):
 - Cancel at various stages
 - Monitor cleanup and resource release
 
-### Scenario 9: Concurrent Organization Operations
+### Scenario 10: Concurrent Organization Operations
 
 **Objective**: Test multi-tenancy isolation.
 
@@ -442,7 +548,7 @@ class TFEUser(HttpUser):
 - Concurrent operations per org
 - Verify no cross-org interference
 
-### Scenario 10: State Locking Contention
+### Scenario 11: State Locking Contention
 
 **Objective**: Test state locking mechanism.
 
