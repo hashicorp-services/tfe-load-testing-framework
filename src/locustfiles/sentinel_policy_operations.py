@@ -331,6 +331,8 @@ class TFESentinelPolicyUser(HttpUser):
 
 has_required_tags = rule {
     all tfplan.resource_changes as _, rc {
+        ((rc.mode else "") != "managed") or
+        not ((rc.change.actions else []) contains "create") or
         all ["environment", "cost_center"] as tag {
             (rc.change.after.triggers else {}) contains tag
         }
