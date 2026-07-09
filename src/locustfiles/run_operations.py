@@ -29,6 +29,7 @@ import random
 import uuid
 import threading
 from locust import HttpUser, task, between, events
+from locust.exception import RescheduleTask
 from src.utils.tfe_client import TFEClient
 
 # Suppress SSL warnings for local development
@@ -175,7 +176,12 @@ output "timestamp" {{
                 catch_response=True,
                 name="/api/v2/workspaces/:id/configuration-versions [CREATE]"
             ) as response:
-                if response.status_code != 201:
+                if response.status_code == 429:
+                    retry_after = int(response.headers.get("Retry-After", 5))
+                    print(f"Rate limited (429) creating config version, backing off {retry_after}s")
+                    time.sleep(retry_after)
+                    raise RescheduleTask()
+                elif response.status_code != 201:
                     response.failure(f"Failed to create config version: {response.status_code}")
                     return
                 
@@ -194,7 +200,12 @@ output "timestamp" {{
                 catch_response=True,
                 name="/configuration-versions/:id/upload [PUT]"
             ) as response:
-                if response.status_code != 200:
+                if response.status_code == 429:
+                    retry_after = int(response.headers.get("Retry-After", 5))
+                    print(f"Rate limited (429) uploading config, backing off {retry_after}s")
+                    time.sleep(retry_after)
+                    raise RescheduleTask()
+                elif response.status_code != 200:
                     response.failure(f"Failed to upload config: {response.status_code}")
                     return
                 response.success()
@@ -224,6 +235,11 @@ output "timestamp" {{
                         elif status == 'errored':
                             print(f"Config version {config_version_id} errored")
                             return
+                    elif cv_response.status_code == 429:
+                        retry_after = int(cv_response.headers.get("Retry-After", 5))
+                        print(f"Rate limited (429) checking config version status, backing off {retry_after}s")
+                        time.sleep(retry_after)
+                        raise RescheduleTask()
                     else:
                         cv_response.failure(f"Failed to check config version status: {cv_response.status_code}")
                         return
@@ -261,6 +277,11 @@ output "timestamp" {{
                     if current_run:
                         print(f"Workspace {self.workspace_name} has active run, waiting before creating new run")
                         time.sleep(2)
+                elif ws_response.status_code == 429:
+                    retry_after = int(ws_response.headers.get("Retry-After", 5))
+                    print(f"Rate limited (429) checking workspace lock, backing off {retry_after}s")
+                    time.sleep(retry_after)
+                    raise RescheduleTask()
                 else:
                     ws_response.failure(f"Failed to check workspace lock status: {ws_response.status_code}")
                     return
@@ -288,7 +309,12 @@ output "timestamp" {{
                 catch_response=True,
                 name="/api/v2/runs [CREATE]"
             ) as response:
-                if response.status_code != 201:
+                if response.status_code == 429:
+                    retry_after = int(response.headers.get("Retry-After", 5))
+                    print(f"Rate limited (429) creating run, backing off {retry_after}s")
+                    time.sleep(retry_after)
+                    raise RescheduleTask()
+                elif response.status_code != 201:
                     error_detail = ""
                     try:
                         error_data = response.json()
@@ -333,7 +359,12 @@ output "timestamp" {{
                 catch_response=True,
                 name="/api/v2/runs/:id [GET]"
             ) as response:
-                if response.status_code != 200:
+                if response.status_code == 429:
+                    retry_after = int(response.headers.get("Retry-After", 5))
+                    print(f"Rate limited (429) monitoring run status, backing off {retry_after}s")
+                    time.sleep(retry_after)
+                    raise RescheduleTask()
+                elif response.status_code != 200:
                     response.failure(f"Failed to get run: {response.status_code}")
                     return
                 
@@ -381,7 +412,12 @@ output "timestamp" {{
                         catch_response=True,
                         name="/api/v2/workspaces/:id/configuration-versions [QUEUE]"
                     ) as response:
-                        if response.status_code != 201:
+                        if response.status_code == 429:
+                            retry_after = int(response.headers.get("Retry-After", 5))
+                            print(f"Rate limited (429) creating queued config version, backing off {retry_after}s")
+                            time.sleep(retry_after)
+                            raise RescheduleTask()
+                        elif response.status_code != 201:
                             response.failure(f"Failed to create config version: {response.status_code}")
                             continue
                         
@@ -400,7 +436,12 @@ output "timestamp" {{
                         catch_response=True,
                         name="/configuration-versions/:id/upload [QUEUE]"
                     ) as response:
-                        if response.status_code != 200:
+                        if response.status_code == 429:
+                            retry_after = int(response.headers.get("Retry-After", 5))
+                            print(f"Rate limited (429) uploading queued config, backing off {retry_after}s")
+                            time.sleep(retry_after)
+                            raise RescheduleTask()
+                        elif response.status_code != 200:
                             response.failure(f"Failed to upload config: {response.status_code}")
                             continue
                         response.success()
@@ -429,6 +470,11 @@ output "timestamp" {{
                                 elif status == 'errored':
                                     print(f"Config version {config_version_id} errored")
                                     break
+                            elif cv_response.status_code == 429:
+                                retry_after = int(cv_response.headers.get("Retry-After", 5))
+                                print(f"Rate limited (429) checking queued config version status, backing off {retry_after}s")
+                                time.sleep(retry_after)
+                                raise RescheduleTask()
                             else:
                                 cv_response.failure(f"Failed to check config version status: {cv_response.status_code}")
                                 break
@@ -460,7 +506,12 @@ output "timestamp" {{
                         catch_response=True,
                         name="/api/v2/runs [QUEUE]"
                     ) as response:
-                        if response.status_code != 201:
+                        if response.status_code == 429:
+                            retry_after = int(response.headers.get("Retry-After", 5))
+                            print(f"Rate limited (429) creating queued run, backing off {retry_after}s")
+                            time.sleep(retry_after)
+                            raise RescheduleTask()
+                        elif response.status_code != 201:
                             error_detail = ""
                             try:
                                 error_data = response.json()
@@ -509,7 +560,12 @@ output "timestamp" {{
                 catch_response=True,
                 name="/api/v2/runs/:id [CANCEL-CHECK]"
             ) as response:
-                if response.status_code != 200:
+                if response.status_code == 429:
+                    retry_after = int(response.headers.get("Retry-After", 5))
+                    print(f"Rate limited (429) checking run for cancel, backing off {retry_after}s")
+                    time.sleep(retry_after)
+                    raise RescheduleTask()
+                elif response.status_code != 200:
                     response.failure(f"Failed to get run: {response.status_code}")
                     return
                 
@@ -530,7 +586,12 @@ output "timestamp" {{
                     catch_response=True,
                     name="/api/v2/runs/:id/actions/cancel [POST]"
                 ) as response:
-                    if response.status_code != 202:
+                    if response.status_code == 429:
+                        retry_after = int(response.headers.get("Retry-After", 5))
+                        print(f"Rate limited (429) canceling run, backing off {retry_after}s")
+                        time.sleep(retry_after)
+                        raise RescheduleTask()
+                    elif response.status_code != 202:
                         response.failure(f"Failed to cancel run: {response.status_code}")
                         return
                     

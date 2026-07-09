@@ -20,8 +20,9 @@ import warnings
 from typing import Optional
 
 from locust import HttpUser, task, between, events
-from locust.exception import StopUser
+from locust.exception import StopUser, RescheduleTask
 from urllib3.exceptions import InsecureRequestWarning
+import time
 
 # Add parent directory to path for imports
 import sys
@@ -149,6 +150,11 @@ class TFEWorkspaceUser(HttpUser):
                     self.created_workspaces.append(workspace_id)
                     response.success()
                     logger.debug(f"Created workspace: {workspace_name} (ID: {workspace_id})")
+                elif response.status_code == 429:
+                    retry_after = int(response.headers.get("Retry-After", 5))
+                    logger.warning(f"Rate limited (429) creating workspace, backing off {retry_after}s")
+                    time.sleep(retry_after)
+                    raise RescheduleTask()
                 else:
                     response.failure(f"Failed to create workspace: HTTP {response.status_code}")
                     logger.error(f"Failed to create workspace {workspace_name}: {response.status_code} - {response.text}")
@@ -182,6 +188,11 @@ class TFEWorkspaceUser(HttpUser):
                     workspace_count = len(data.get("data", []))
                     response.success()
                     logger.debug(f"Listed {workspace_count} workspaces")
+                elif response.status_code == 429:
+                    retry_after = int(response.headers.get("Retry-After", 5))
+                    logger.warning(f"Rate limited (429) listing workspaces, backing off {retry_after}s")
+                    time.sleep(retry_after)
+                    raise RescheduleTask()
                 else:
                     response.failure(f"Failed to list workspaces: {response.status_code}")
                     logger.error(f"Failed to list workspaces: {response.text}")
@@ -223,6 +234,11 @@ class TFEWorkspaceUser(HttpUser):
                     response.success()
                     self.created_workspaces.remove(workspace_id)
                     logger.debug(f"Workspace not found (deleted?): {workspace_id}")
+                elif response.status_code == 429:
+                    retry_after = int(response.headers.get("Retry-After", 5))
+                    logger.warning(f"Rate limited (429) getting workspace, backing off {retry_after}s")
+                    time.sleep(retry_after)
+                    raise RescheduleTask()
                 else:
                     response.failure(f"Failed to get workspace: {response.status_code}")
                     logger.error(f"Failed to get workspace {workspace_id}: {response.text}")
@@ -263,6 +279,12 @@ class TFEWorkspaceUser(HttpUser):
                     # Already deleted - not a failure
                     response.success()
                     logger.debug(f"Workspace already deleted: {workspace_id}")
+                elif response.status_code == 429:
+                    retry_after = int(response.headers.get("Retry-After", 5))
+                    logger.warning(f"Rate limited (429) deleting workspace, backing off {retry_after}s")
+                    self.created_workspaces.insert(0, workspace_id)  # put it back
+                    time.sleep(retry_after)
+                    raise RescheduleTask()
                 else:
                     response.failure(f"Failed to delete workspace: {response.status_code}")
                     logger.error(f"Failed to delete workspace {workspace_id}: {response.text}")

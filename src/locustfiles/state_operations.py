@@ -27,6 +27,7 @@ import time
 import random
 import uuid
 from locust import HttpUser, task, between, events
+from locust.exception import RescheduleTask
 from src.utils.tfe_client import TFEClient
 
 # Suppress SSL warnings for local development
@@ -226,6 +227,11 @@ class TFEStateUser(HttpUser):
                     response.success()
                     print(f"Uploaded state version {version_id} to {self.workspace_name} "
                           f"(serial: {self.state_counter - 1}, size: {len(state_json)} bytes)")
+                elif response.status_code == 429:
+                    retry_after = int(response.headers.get("Retry-After", 5))
+                    print(f"Rate limited (429) uploading state, backing off {retry_after}s")
+                    time.sleep(retry_after)
+                    raise RescheduleTask()
                 else:
                     response.failure(f"Failed to create state version: {response.status_code}")
             
@@ -265,6 +271,11 @@ class TFEStateUser(HttpUser):
                     # No state yet - this is normal for new workspaces
                     response.success()
                     return
+                elif response.status_code == 429:
+                    retry_after = int(response.headers.get("Retry-After", 5))
+                    print(f"Rate limited (429) downloading current state, backing off {retry_after}s")
+                    time.sleep(retry_after)
+                    raise RescheduleTask()
                 elif response.status_code != 200:
                     response.failure(f"Failed to get current state: {response.status_code}")
                     return
@@ -367,6 +378,11 @@ class TFEStateUser(HttpUser):
                     # Store version IDs for potential download
                     if state_versions.get('data'):
                         self.state_versions = [v['id'] for v in state_versions['data']]
+                elif response.status_code == 429:
+                    retry_after = int(response.headers.get("Retry-After", 5))
+                    print(f"Rate limited (429) listing state versions, backing off {retry_after}s")
+                    time.sleep(retry_after)
+                    raise RescheduleTask()
                 else:
                     response.failure(f"Failed to list state versions: {response.status_code}")
             
@@ -397,7 +413,12 @@ class TFEStateUser(HttpUser):
                 catch_response=True,
                 name="/api/v2/state-versions/:id [GET]"
             ) as response:
-                if response.status_code != 200:
+                if response.status_code == 429:
+                    retry_after = int(response.headers.get("Retry-After", 5))
+                    print(f"Rate limited (429) getting state version, backing off {retry_after}s")
+                    time.sleep(retry_after)
+                    raise RescheduleTask()
+                elif response.status_code != 200:
                     response.failure(f"Failed to get state version: {response.status_code}")
                     return
                 
