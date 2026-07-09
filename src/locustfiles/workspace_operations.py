@@ -149,13 +149,9 @@ class TFEWorkspaceUser(HttpUser):
                     self.created_workspaces.append(workspace_id)
                     response.success()
                     logger.debug(f"Created workspace: {workspace_name} (ID: {workspace_id})")
-                elif response.status_code == 422:
-                    # Workspace name conflict - not a failure for load testing
-                    response.success()
-                    logger.debug(f"Workspace name conflict: {workspace_name}")
                 else:
-                    response.failure(f"Failed to create workspace: {response.status_code}")
-                    logger.error(f"Failed to create workspace {workspace_name}: {response.text}")
+                    response.failure(f"Failed to create workspace: HTTP {response.status_code}")
+                    logger.error(f"Failed to create workspace {workspace_name}: {response.status_code} - {response.text}")
         
         except Exception as e:
             logger.error(f"Exception creating workspace: {e}")
