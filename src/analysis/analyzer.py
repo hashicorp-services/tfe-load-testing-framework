@@ -422,7 +422,7 @@ class LoadTestAnalyzer:
                 if eval_result.threshold_level == ThresholdLevel.POOR:
                     add_recommendation(
                         f"🔴 Slow response times in {eval_result.metric_name}. "
-                        "Consider scaling TFE resources or optimizing database queries."
+                        "Consider scaling TFE resources."
                     )
         
         # Check for high queue depth
