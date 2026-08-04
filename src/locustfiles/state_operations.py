@@ -26,6 +26,7 @@ import json
 import time
 import random
 import uuid
+from urllib.parse import urlparse
 from locust import HttpUser, task, between, events
 from locust.exception import RescheduleTask
 from src.utils.tfe_client import TFEClient
@@ -286,53 +287,34 @@ class TFEStateUser(HttpUser):
             if not current_state.get('data'):
                 return
             
-            # Download the state file (presigned URL - explicitly remove auth header)
+            # Download the state file via its TFE API path.
+            # hosted-state-download-url is a TFE endpoint that requires Bearer auth
+            # and redirects internally to object storage — not a bare presigned URL.
             download_url = current_state['data']['attributes']['hosted-state-download-url']
-            
-            # Create a new session without auth headers for presigned URL
-            import requests
-            session = requests.Session()
-            
-            start_time = time.time()
-            try:
-                response = session.get(
-                    download_url,
-                    verify=self.tfe.verify_ssl
-                )
-                total_time = int((time.time() - start_time) * 1000)
-                
-                if response.status_code == 200:
+            download_path = urlparse(download_url).path
+
+            with self.client.get(
+                download_path,
+                headers={
+                    "Authorization": f"Bearer {self.tfe.token}",
+                },
+                verify=self.tfe.verify_ssl,
+                catch_response=True,
+                name="/state-versions/:id/hosted_state [DOWNLOAD]"
+            ) as response:
+                if response.status_code == 429:
+                    retry_after = int(response.headers.get("Retry-After", 5))
+                    print(f"Rate limited (429) downloading state, backing off {retry_after}s")
+                    time.sleep(retry_after)
+                    raise RescheduleTask()
+                elif response.status_code == 200:
                     state_data = response.json()
                     resource_count = len(state_data.get('resources', []))
-                    self.environment.events.request.fire(
-                        request_type="GET",
-                        name="/state-versions/:id/hosted_state [DOWNLOAD]",
-                        response_time=total_time,
-                        response_length=len(response.content),
-                        exception=None,
-                        context={}
-                    )
+                    response.success()
                     print(f"Downloaded current state from {self.workspace_name} "
                           f"({resource_count} resources, {len(response.content)} bytes)")
                 else:
-                    self.environment.events.request.fire(
-                        request_type="GET",
-                        name="/state-versions/:id/hosted_state [DOWNLOAD]",
-                        response_time=total_time,
-                        response_length=0,
-                        exception=Exception(f"Failed to download state: {response.status_code}"),
-                        context={}
-                    )
-            except Exception as e:
-                total_time = int((time.time() - start_time) * 1000)
-                self.environment.events.request.fire(
-                    request_type="GET",
-                    name="/state-versions/:id/hosted_state [DOWNLOAD]",
-                    response_time=total_time,
-                    response_length=0,
-                    exception=e,
-                    context={}
-                )
+                    response.failure(f"Failed to download state: {response.status_code}")
             
         except Exception as e:
             print(f"Error downloading current state: {e}")
@@ -425,53 +407,34 @@ class TFEStateUser(HttpUser):
                 state_version = response.json()
                 response.success()
             
-            # Download the state file (presigned URL - explicitly remove auth header)
+            # Download the state file via its TFE API path.
+            # hosted-state-download-url is a TFE endpoint that requires Bearer auth
+            # and redirects internally to object storage — not a bare presigned URL.
             download_url = state_version['data']['attributes']['hosted-state-download-url']
-            
-            # Create a new session without auth headers for presigned URL
-            import requests
-            session = requests.Session()
-            
-            start_time = time.time()
-            try:
-                response = session.get(
-                    download_url,
-                    verify=self.tfe.verify_ssl
-                )
-                total_time = int((time.time() - start_time) * 1000)
-                
-                if response.status_code == 200:
+            download_path = urlparse(download_url).path
+
+            with self.client.get(
+                download_path,
+                headers={
+                    "Authorization": f"Bearer {self.tfe.token}",
+                },
+                verify=self.tfe.verify_ssl,
+                catch_response=True,
+                name="/state-versions/:id/hosted_state [DOWNLOAD SPECIFIC]"
+            ) as response:
+                if response.status_code == 429:
+                    retry_after = int(response.headers.get("Retry-After", 5))
+                    print(f"Rate limited (429) downloading state version, backing off {retry_after}s")
+                    time.sleep(retry_after)
+                    raise RescheduleTask()
+                elif response.status_code == 200:
                     state_data = response.json()
                     serial = state_data.get('serial', 'unknown')
-                    self.environment.events.request.fire(
-                        request_type="GET",
-                        name="/state-versions/:id/hosted_state [DOWNLOAD SPECIFIC]",
-                        response_time=total_time,
-                        response_length=len(response.content),
-                        exception=None,
-                        context={}
-                    )
+                    response.success()
                     print(f"Downloaded state version {version_id} from {self.workspace_name} "
                           f"(serial: {serial}, {len(response.content)} bytes)")
                 else:
-                    self.environment.events.request.fire(
-                        request_type="GET",
-                        name="/state-versions/:id/hosted_state [DOWNLOAD SPECIFIC]",
-                        response_time=total_time,
-                        response_length=0,
-                        exception=Exception(f"Failed to download state: {response.status_code}"),
-                        context={}
-                    )
-            except Exception as e:
-                total_time = int((time.time() - start_time) * 1000)
-                self.environment.events.request.fire(
-                    request_type="GET",
-                    name="/state-versions/:id/hosted_state [DOWNLOAD SPECIFIC]",
-                    response_time=total_time,
-                    response_length=0,
-                    exception=e,
-                    context={}
-                )
+                    response.failure(f"Failed to download state: {response.status_code}")
             
         except Exception as e:
             print(f"Error downloading specific state version: {e}")

@@ -826,15 +826,18 @@ class TFEClient:
     
     def download_state(self, download_url: str) -> bytes:
         """
-        Download state file from presigned URL.
-        
+        Download state file from a hosted-state-download-url.
+
+        The TFE API returns this URL as a TFE endpoint that requires Bearer
+        authentication and redirects internally to object storage.
+
         Args:
-            download_url: Presigned download URL
-        
+            download_url: Value of hosted-state-download-url from the TFE API
+
         Returns:
             State file content
         """
-        response = requests.get(
+        response = self.session.get(
             download_url,
             verify=self.verify_ssl,
             timeout=self.timeout
