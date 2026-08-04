@@ -48,10 +48,6 @@ This framework provides:
 
 3. **Set up the environment**
    ```bash
-   # Using Task (recommended)
-   task setup
-   
-   # Or manually
    python3 -m venv venv
    source venv/bin/activate  # On Windows: venv\Scripts\activate
    pip install -r requirements.txt
@@ -68,14 +64,14 @@ task test:all
 
 # Run individual test scenarios
 task test:workspace
-task test:runs
+task test:run
 task test:state
 
 # Run with custom parameters
 task test:workspace -- --users 50 --spawn-rate 5 --run-time 10m
 
 # Run with web UI for interactive testing
-task test:workspace-web
+./examples/run_workspace_test.sh web
 ```
 
 **Option 2: Run all tests sequentially**
@@ -132,10 +128,11 @@ tfe-load-testing-framework/
 │   └── config/               # Configuration management
 ├── config/
 │   └── tfe_config.yaml.example  # Configuration template
+├── .env.example             # Environment variables template
 ├── examples/
-│   ├── .env.example                # Environment variables template
 │   ├── run_workspace_test.sh       # Workspace test runner
 │   ├── run_run_operations_test.sh  # Run operations test runner
+│   ├── run_run_sentinel_policy_test.sh # Sentinel policy test runner
 │   └── run_state_operations_test.sh # State operations test runner
 ├── platform/
 │   └── tfe/                 # Local TFE development environment
@@ -338,20 +335,7 @@ cp config/tfe_config.yaml.example config/tfe_config.yaml
 
 The framework includes a comprehensive analysis tool that evaluates test results against configurable thresholds:
 
-**Using Task (recommended):**
-```bash
-# Analyze latest test results
-task analyze
-
-# Analyze specific test results
-task analyze -- --locust-stats reports/run_20260519_100606/test_stats.csv
-
-# Generate HTML report with Grafana metrics
-task analyze -- --grafana-url http://localhost:3000 --html-report reports/analysis.html
-
-# CI/CD mode (exit code 1 if test fails)
-task analyze:ci
-```
+Analysis runs automatically after each test scenario when using `task test:all` or `./run_all_tests.sh`. To run analysis manually:
 
 **Direct command:**
 ```bash
@@ -598,11 +582,7 @@ See [AGENTS.md](AGENTS.md) for detailed setup instructions.
 
 **Using Task:**
 ```bash
-# Run all tests
-task test
-
-# Run with coverage
-task test:coverage
+task test:all
 ```
 
 **Direct commands:**
@@ -616,22 +596,6 @@ pytest --cov=src tests/
 
 ### Code Quality
 
-**Using Task:**
-```bash
-# Format code
-task fmt
-
-# Lint code
-task lint
-
-# Type checking
-task typecheck
-
-# Run all quality checks
-task check
-```
-
-**Direct commands:**
 ```bash
 # Format code
 black src/ tests/
