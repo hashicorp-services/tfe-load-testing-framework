@@ -127,7 +127,51 @@ class TFEClient:
             logger.debug(f"Rate limit remaining: {remaining}")
         
         return response
-    
+
+    def _make_request_with_retry(
+        self,
+        method: str,
+        endpoint: str,
+        json_data: Optional[Dict[str, Any]] = None,
+        params: Optional[Dict[str, Any]] = None,
+        max_retries: int = 3,
+        **kwargs
+    ) -> requests.Response:
+        """
+        Make an API request, retrying on 429 (rate limit) responses.
+
+        Respects the Retry-After header when present; otherwise backs off
+        with a 5-second default between attempts.
+
+        Args:
+            method: HTTP method (GET, POST, PATCH, DELETE)
+            endpoint: API endpoint (relative to /api/v2/)
+            json_data: JSON payload for request body
+            params: Query parameters
+            max_retries: Maximum number of attempts (default 3)
+            **kwargs: Additional arguments passed to requests
+
+        Returns:
+            Response object (non-429)
+
+        Raises:
+            requests.HTTPError: If all retries are exhausted or a non-429 error occurs
+        """
+        for attempt in range(max_retries):
+            response = self._make_request(method, endpoint, json_data=json_data, params=params, **kwargs)
+            if response.status_code != 429:
+                return response
+            retry_after = int(response.headers.get("Retry-After", 5))
+            logger.warning(
+                f"Rate limited (429) on {method} {endpoint}, "
+                f"backing off {retry_after}s (attempt {attempt + 1}/{max_retries})"
+            )
+            time.sleep(retry_after)
+        # Final attempt after last sleep — raise on failure
+        response = self._make_request(method, endpoint, json_data=json_data, params=params, **kwargs)
+        response.raise_for_status()
+        return response
+
     # Organization Operations
     
     def create_organization(self, name: str, email: str) -> Dict[str, Any]:
@@ -282,11 +326,13 @@ class TFEClient:
     def delete_workspace(self, workspace_id: str) -> None:
         """
         Delete a workspace.
-        
+
+        Retries automatically on 429 (rate limit) responses.
+
         Args:
             workspace_id: Workspace ID
         """
-        response = self._make_request("DELETE", f"workspaces/{workspace_id}")
+        response = self._make_request_with_retry("DELETE", f"workspaces/{workspace_id}")
         response.raise_for_status()
     
     def update_workspace(
@@ -542,11 +588,14 @@ class TFEClient:
         if comment:
             payload["comment"] = comment
         
-        response = self._make_request(
+        response = self._make_request_with_retry(
             "POST",
             f"runs/{run_id}/actions/cancel",
             json_data=payload
         )
+        if response.status_code == 409:
+            # Run already moved past a cancelable state — treat as a no-op.
+            return
         response.raise_for_status()
     
     def poll_run_until_completion(
@@ -826,15 +875,18 @@ class TFEClient:
     
     def download_state(self, download_url: str) -> bytes:
         """
-        Download state file from presigned URL.
-        
+        Download state file from a hosted-state-download-url.
+
+        The TFE API returns this URL as a TFE endpoint that requires Bearer
+        authentication and redirects internally to object storage.
+
         Args:
-            download_url: Presigned download URL
-        
+            download_url: Value of hosted-state-download-url from the TFE API
+
         Returns:
             State file content
         """
-        response = requests.get(
+        response = self.session.get(
             download_url,
             verify=self.verify_ssl,
             timeout=self.timeout

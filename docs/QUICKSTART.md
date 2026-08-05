@@ -69,8 +69,9 @@ echo $TFE_ORGANIZATION
 # 2. Run workspace operations test
 # 3. Run run operations test
 # 4. Run state operations test
-# 5. Analyze each test
-# 6. Generate reports in reports/run_TIMESTAMP/
+# 5. Run sentinel policy operations test
+# 6. Analyze each test
+# 7. Generate reports in reports/run_TIMESTAMP/
 ```
 
 ### Option B: Run Individual Test
@@ -174,17 +175,19 @@ export TFE_ORGANIZATION=your-exact-org-name
 ./run_all_tests.sh [options]
 
 Options:
-  --users NUM          Number of concurrent users (default: 10)
-  --spawn-rate NUM     User spawn rate per second (default: 2)
-  --run-time TIME      Test duration (default: 5m)
-  --host URL           TFE hostname (default: https://tfe.localdemo.me)
-  --with-grafana       Include Grafana metrics
-  --grafana-url URL    Grafana URL (default: http://localhost:3000)
-  --skip-workspace     Skip workspace operations test
-  --skip-run           Skip run operations test
-  --skip-state         Skip state operations test
-  --ci-mode            CI/CD mode (fail fast)
-  --help               Show help message
+  --max-concurrent-runs NUM  Primary load parameter — auto-sets users & spawn-rate (default: 20)
+  --users NUM                Override automatic user count (optional)
+  --spawn-rate NUM           User spawn rate per second (optional)
+  --run-time TIME            Test duration (default: 5m)
+  --host URL                 TFE hostname (default: https://tfe.localdemo.me)
+  --with-grafana             Include Grafana metrics
+  --grafana-url URL          Grafana URL (default: http://localhost:3000)
+  --skip-workspace           Skip workspace operations test
+  --skip-run                 Skip run operations test
+  --skip-state               Skip state operations test
+  --skip-sentinel            Skip sentinel policy operations test
+  --ci-mode                  CI/CD mode (fail fast)
+  --help                     Show help message
 ```
 
 ## Support
@@ -196,5 +199,5 @@ For issues or questions:
 
 ---
 
-**Last Updated**: 2026-05-11  
-**Version**: 1.0.0
+**Last Updated**: 2026-08-04
+**Version**: 1.1.0

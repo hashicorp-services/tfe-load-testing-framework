@@ -591,6 +591,12 @@ output "timestamp" {{
                         print(f"Rate limited (429) canceling run, backing off {retry_after}s")
                         time.sleep(retry_after)
                         raise RescheduleTask()
+                    elif response.status_code == 409:
+                        # Run transitioned out of a cancelable state between our status check
+                        # and this cancel request (race condition). Treat as a no-op.
+                        response.success()
+                        print(f"Run {run_id} already moved past cancelable state (409), skipping")
+                        return
                     elif response.status_code != 202:
                         response.failure(f"Failed to cancel run: {response.status_code}")
                         return
