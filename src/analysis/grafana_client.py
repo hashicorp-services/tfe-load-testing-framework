@@ -1,5 +1,5 @@
 # Copyright (c) 2026 IBM Corporation
-# SPDX-License-Identifier: IPL-1.0
+# SPDX-License-Identifier: MPL-2.0
 
 """
 Grafana API Client for fetching metrics during load test analysis.
