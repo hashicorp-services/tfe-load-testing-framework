@@ -38,8 +38,9 @@ The `run_all_tests.sh` script provides a convenient way to:
 
 ### Load Test Configuration
 
-- `--users NUM` - Number of concurrent users (default: 10)
-- `--spawn-rate NUM` - User spawn rate per second (default: 2)
+- `--max-concurrent-runs NUM` - Primary load parameter; auto-calculates users and spawn-rate (default: 20)
+- `--users NUM` - Override automatic user count (optional)
+- `--spawn-rate NUM` - Override automatic spawn rate (optional)
 - `--run-time TIME` - Test duration (e.g., 5m, 30s, 1h) (default: 5m)
 - `--host URL` - TFE hostname (default: https://tfe.localdemo.me)
 
@@ -53,6 +54,7 @@ The `run_all_tests.sh` script provides a convenient way to:
 - `--skip-workspace` - Skip workspace operations test
 - `--skip-run` - Skip run operations test
 - `--skip-state` - Skip state operations test
+- `--skip-sentinel` - Skip sentinel policy operations test
 
 ### Behavior
 
@@ -66,16 +68,19 @@ All reports are organized in timestamped directories:
 ```
 reports/
 └── run_20260507_153000/
-    ├── index.html                          # Navigation page
-    ├── workspace_operations_stats.csv      # Locust CSV stats
-    ├── workspace_operations_locust.html    # Locust HTML report
-    ├── workspace_operations_analysis.html  # Analysis report
+    ├── index.html                                  # Navigation page
+    ├── workspace_operations_stats.csv              # Locust CSV stats
+    ├── workspace_operations_locust.html            # Locust HTML report
+    ├── workspace_operations_analysis.html          # Analysis report
     ├── run_operations_stats.csv
     ├── run_operations_locust.html
     ├── run_operations_analysis.html
     ├── state_operations_stats.csv
     ├── state_operations_locust.html
-    └── state_operations_analysis.html
+    ├── state_operations_analysis.html
+    ├── sentinel_policy_operations_stats.csv
+    ├── sentinel_policy_operations_locust.html
+    └── sentinel_policy_operations_analysis.html
 ```
 
 ## Examples
@@ -163,6 +168,8 @@ Reports generated:
   - CSV Stats: reports/run_20260507_153000/workspace_operations_stats.csv
 ```
 
+Note: Pass/fail is determined entirely by the analysis threshold evaluation in [`config/analysis_thresholds.yaml`](../config/analysis_thresholds.yaml). Locust always exits cleanly after completing its run, so individual transient request errors do not abort the test.
+
 ### Summary Report
 
 At the end, you'll see a summary:
@@ -173,7 +180,7 @@ Test Run Summary
 =================================
 
 📊 Results
-  Tests Run: 3
+  Tests Run: 4
   Tests Passed: 2
   Tests Failed: 1
   Duration: 450s
@@ -448,5 +455,5 @@ wait
 
 ---
 
-**Last Updated**: 2026-05-11  
-**Version**: 1.0.0
+**Last Updated**: 2026-08-04
+**Version**: 1.1.0

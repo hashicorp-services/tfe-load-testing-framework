@@ -259,7 +259,7 @@ tasks:
         fi
 
   test:all:
-    desc: Run all load tests with analysis (workspace, run, and state operations)
+    desc: Run all load tests with analysis (workspace, run, state, and sentinel policy operations)
     cmds:
       - |
         if [ ! -f "run_all_tests.sh" ]; then

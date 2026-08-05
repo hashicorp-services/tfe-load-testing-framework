@@ -2,6 +2,8 @@
 
 A comprehensive, open-source load testing framework specifically designed for **Terraform Enterprise (TFE)** using [Locust.io](https://locust.io/). This framework helps customers evaluate and optimize their TFE deployments under various load conditions.
 
+> **⚠️ Disclaimer:** This project is community-developed and is **not officially supported or maintained by HashiCorp or IBM**. It is provided as-is, with no guarantees of correctness, safety, security, or fitness for any particular purpose. Use at your own risk against non-production environments first, and always review the code before running it against your infrastructure. See the [License](LICENSE) for full terms.
+
 > **🚀 New to the framework?** Start with the [Quick Start Guide](docs/QUICKSTART.md) for a 5-minute setup!
 
 
@@ -119,25 +121,25 @@ locust -f src/locustfiles/workspace_operations.py \
 ```
 tfe-load-testing-framework/
 ├── src/
-│   ├── locustfiles/          # Locust test scenarios
-│   │   ├── workspace_operations.py  # Workspace lifecycle tests
-│   │   ├── run_operations.py        # Run lifecycle and queue tests
-│   │   └── state_operations.py      # State management tests
-│   ├── utils/                # Utility modules
-│   │   └── tfe_client.py    # TFE API client wrapper
-│   └── config/               # Configuration management
+│   ├── locustfiles/               # Locust test scenarios
+│   │   ├── workspace_operations.py       # Workspace lifecycle tests
+│   │   ├── run_operations.py             # Run lifecycle and queue tests
+│   │   ├── state_operations.py           # State management tests
+│   │   └── sentinel_policy_operations.py # Sentinel policy evaluation tests
+│   ├── utils/                     # Utility modules
+│   │   └── tfe_client.py          # TFE API client wrapper
+│   └── analysis/                  # Results analysis and reporting
 ├── config/
-│   └── tfe_config.yaml.example  # Configuration template
-├── .env.example             # Environment variables template
+│   └── tfe_config.yaml.example    # Configuration template
+├── .env.example                   # Environment variables template
 ├── examples/
-│   ├── run_workspace_test.sh       # Workspace test runner
-│   ├── run_run_operations_test.sh  # Run operations test runner
-│   ├── run_run_sentinel_policy_test.sh # Sentinel policy test runner
-│   └── run_state_operations_test.sh # State operations test runner
+│   ├── run_workspace_test.sh          # Workspace test runner
+│   ├── run_run_operations_test.sh     # Run operations test runner
+│   ├── run_sentinel_policy_test.sh    # Sentinel policy test runner
+│   └── run_state_operations_test.sh   # State operations test runner
 ├── platform/
 │   └── tfe/                 # Local TFE development environment
 │       └── monitoring/      # Prometheus, Grafana, exporters
-├── tests/                   # Unit and integration tests
 ├── reports/                 # Generated test reports
 ├── docs/                    # Documentation
 └── requirements.txt         # Python dependencies
@@ -364,11 +366,11 @@ Analysis runs automatically after each test scenario when using `task test:all` 
 
 **Example: Test Results Within Thresholds**
 
-![Test Results Within Thresholds](docs/screenshots/results-exceeding-thresholds.png)
+![Test Results Within Thresholds](docs/screenshots/results-within-thresholds.png)
 
 **Example: Test Results Exceeding Thresholds**
 
-![Test Results Exceeding Thresholds](docs/screenshots/results-within-thresholds.png)
+![Test Results Exceeding Thresholds](docs/screenshots/results-exceeding-thresholds.png)
 
 See [docs/ANALYSIS_TOOL.md](docs/ANALYSIS_TOOL.md) for complete documentation.
 
@@ -614,6 +616,17 @@ mypy src/
 - [Locust Documentation](https://docs.locust.io/) - Official Locust.io documentation
 - [TFE API Documentation](https://developer.hashicorp.com/terraform/cloud-docs/api-docs) - TFE API reference
 
+## 🐛 Reporting Issues
+
+If you believe you have found a defect in this load test framework or its documentation, use the [GitHub issue tracker](../../issues) to report the problem to the maintainers. Please include:
+
+- A clear description of the problem
+- Steps to reproduce it
+- The TFE version and environment you are testing against
+- Relevant log output or error messages
+
+> **Note:** This project is not officially supported by HashiCorp or IBM. Issues are addressed on a best-effort basis by community contributors.
+
 ## 🤝 Contributing
 
 Contributions are welcome! Please:
@@ -668,13 +681,9 @@ This project is licensed under the IBM Public License Version 1.0 - see the [LIC
 - macOS typical: `192.168.127.254`
 - Linux typical: `10.88.0.1`
 
-**"State download 401 errors (local dev only)"**
-- Symptom: State uploads work, but downloads fail with 401 Unauthorized
-- Root cause: Local MinIO presigned URLs have networking/signature limitations
-- Impact: State download operations in load tests will show failures (~20-30% failure rate)
-- Workaround: Test against production TFE instance for full functionality
-- Note: This is a known limitation of the local dev environment, not a code issue
-- All other operations (uploads, listing, API calls) work correctly at 100% success rate
+**"State download 401 errors"**
+- This was a bug and has been fixed — state downloads should work at 100% success against any TFE instance
+- If still seeing 401s, verify `TFE_TOKEN` is valid and `TFE_VERIFY_SSL` is set correctly for your environment
 
 ### Diagnostic Commands
 
@@ -719,5 +728,4 @@ task --list
 
 ---
 
-**Status**: Production ready with documented limitations  
-**Last Updated**: 2026-05-11
+**Last Updated**: 2026-08-04

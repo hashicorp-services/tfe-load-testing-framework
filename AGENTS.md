@@ -534,5 +534,4 @@ scenarios:
 
 ---
 
-**Last Updated**: 2026-05-11  
-**Status**: Production ready with documented limitations
+**Last Updated**: 2026-08-04
