@@ -2,7 +2,9 @@
 
 A comprehensive, open-source load testing framework specifically designed for **Terraform Enterprise (TFE)** using [Locust.io](https://locust.io/). This framework helps customers evaluate and optimize their TFE deployments under various load conditions.
 
-> **⚠️ Disclaimer:** This project is community-developed and is **not officially supported or maintained by HashiCorp or IBM**. It is provided as-is, with no guarantees of correctness, safety, security, or fitness for any particular purpose. Use at your own risk against non-production environments first, and always review the code before running it against your infrastructure. See the [License](LICENSE) for full terms.
+## IBM Public Repository Disclosure
+
+All content in these repositories including code has been provided by IBM under the associated open source software license and IBM is under no obligation to provide enhancements, updates, or support. IBM developers produced this code as an open source project (not as an IBM product), and IBM makes no assertions as to the level of quality nor security, and will not be maintaining this code going forward.
 
 > **🚀 New to the framework?** Start with the [Quick Start Guide](docs/QUICKSTART.md) for a 5-minute setup!
 
