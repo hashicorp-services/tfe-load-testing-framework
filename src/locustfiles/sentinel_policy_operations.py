@@ -1,5 +1,5 @@
 # Copyright (c) 2026 IBM Corporation
-# SPDX-License-Identifier: IPL-1.0
+# SPDX-License-Identifier: MPL-2.0
 
 """
 TFE Sentinel Policy Evaluation Load Test
