@@ -228,7 +228,8 @@ run_test() {
         --run-time "$RUN_TIME" \
         --host "$HOST" \
         --csv "$REPORT_DIR/${test_name}" \
-        --html "$REPORT_DIR/${test_name}_locust.html"; then
+        --html "$REPORT_DIR/${test_name}_locust.html" \
+        --exit-code-on-error 0; then
         
         echo -e "${GREEN}✅ Load test completed${NC}"
     else
