@@ -352,3 +352,21 @@ tasks:
         fi
         chmod +x examples/run_sentinel_policy_test.sh
         MAX_CONCURRENT_RUNS="${MAX_CONCURRENT_RUNS:-5}" ./examples/run_sentinel_policy_test.sh {{.CLI_ARGS}}
+  test:workspace-run:
+    desc: Run workspace + run concurrent scaling load test
+    cmds:
+      - |
+        if [ ! -f "examples/run_workspace_run_test.sh" ]; then
+          printf 'Error: examples/run_workspace_run_test.sh not found\n' >&2
+          exit 1
+        fi
+        if [ -f ".env" ]; then
+          set -a
+          . .env
+          set +a
+        fi
+        if [ -f "venv/bin/activate" ]; then
+          . venv/bin/activate
+        fi
+        chmod +x examples/run_workspace_run_test.sh
+        MAX_CONCURRENT_RUNS="${MAX_CONCURRENT_RUNS:-20}" ./examples/run_workspace_run_test.sh {{.CLI_ARGS}}

@@ -126,6 +126,7 @@ tfe-load-testing-framework/
 │   ├── locustfiles/               # Locust test scenarios
 │   │   ├── workspace_operations.py       # Workspace lifecycle tests
 │   │   ├── run_operations.py             # Run lifecycle and queue tests
+│   │   ├── workspace_run_operations.py   # Workspace + run concurrent scaling
 │   │   ├── state_operations.py           # State management tests
 │   │   └── sentinel_policy_operations.py # Sentinel policy evaluation tests
 │   ├── utils/                     # Utility modules
@@ -137,6 +138,7 @@ tfe-load-testing-framework/
 ├── examples/
 │   ├── run_workspace_test.sh          # Workspace test runner
 │   ├── run_run_operations_test.sh     # Run operations test runner
+│   ├── run_workspace_run_test.sh      # Workspace + run scaling test runner
 │   ├── run_sentinel_policy_test.sh    # Sentinel policy test runner
 │   └── run_state_operations_test.sh   # State operations test runner
 ├── platform/
@@ -196,6 +198,29 @@ Tests Terraform run lifecycle and queue management:
 - Monitor run status: 8
 - Queue multiple runs: 3
 - Cancel run: 2
+
+### 2b. Workspace + Run (Concurrent Scaling) (✅ Implemented)
+
+Focused scenario for measuring concurrent-run capacity: each Locust user creates **one workspace**, then only uploads config and triggers runs (no monitor/cancel/queue-multiple tasks). Because TFE locks workspaces (one active run per workspace), `N` users ⇒ `N` workspaces ⇒ up to `N` concurrent runs.
+
+**Run the test:**
+```bash
+# Default: MAX_CONCURRENT_RUNS=20 (auto: 20 users, 20/s spawn)
+./examples/run_workspace_run_test.sh
+
+# Or via Task
+task test:workspace-run
+
+# Scale concurrent runs
+MAX_CONCURRENT_RUNS=50 ./examples/run_workspace_run_test.sh
+./examples/run_workspace_run_test.sh --max-concurrent-runs 100 --run-time 15m
+
+# Web UI mode
+./examples/run_workspace_run_test.sh web
+```
+
+**Task:**
+- Create and trigger run (config version → upload → wait uploaded → lock check → create run)
 
 ### 3. State Operations (✅ Implemented)
 
@@ -504,6 +529,20 @@ MAX_CONCURRENT_RUNS=100 LOCUST_RUN_TIME=30m ./examples/run_run_operations_test.s
 ```bash
 # Manually set concurrent runs, users, and spawn rate
 MAX_CONCURRENT_RUNS=20 LOCUST_USERS=15 LOCUST_SPAWN_RATE=5 ./examples/run_run_operations_test.sh
+```
+
+#### Workspace + Run (concurrent scaling)
+
+Prefer `run_workspace_run_test.sh` when you want a 1:1 mapping of users → workspaces → concurrent runs (single create-and-trigger task only):
+
+```bash
+# Light / medium / heavy via MAX_CONCURRENT_RUNS or --max-concurrent-runs
+MAX_CONCURRENT_RUNS=10 ./examples/run_workspace_run_test.sh
+MAX_CONCURRENT_RUNS=50 LOCUST_RUN_TIME=15m ./examples/run_workspace_run_test.sh
+./examples/run_workspace_run_test.sh --max-concurrent-runs 100 --run-time 30m
+
+# Task runner (default MAX_CONCURRENT_RUNS=20)
+task test:workspace-run -- --max-concurrent-runs 50 --run-time 15m
 ```
 
 ### TFE Capacity Configuration
