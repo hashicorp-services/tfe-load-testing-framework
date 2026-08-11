@@ -205,13 +205,13 @@ Focused scenario for measuring concurrent-run capacity: each Locust user creates
 
 **Run the test:**
 ```bash
-# Default: MAX_CONCURRENT_RUNS=20 (auto: 20 users, 20/s spawn)
+# Default: MAX_CONCURRENT_RUNS=20 (auto: 20 users, 20/s spawn — always 1:1)
 ./examples/run_workspace_run_test.sh
 
 # Or via Task
 task test:workspace-run
 
-# Scale concurrent runs
+# Scale concurrent runs (users/spawn always = MAX_CONCURRENT_RUNS unless --users/--spawn-rate)
 MAX_CONCURRENT_RUNS=50 ./examples/run_workspace_run_test.sh
 ./examples/run_workspace_run_test.sh --max-concurrent-runs 100 --run-time 15m
 
@@ -220,7 +220,7 @@ MAX_CONCURRENT_RUNS=50 ./examples/run_workspace_run_test.sh
 ```
 
 **Task:**
-- Create and trigger run (config version → upload → wait uploaded → lock check → create run)
+- Create and trigger run (active-run gate → config version → upload → wait uploaded → re-check → create run)
 
 ### 3. State Operations (✅ Implemented)
 

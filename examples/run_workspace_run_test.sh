@@ -79,7 +79,7 @@ usage() {
     echo ""
     echo "Options:"
     echo "  --max-concurrent-runs NUM  Target concurrent runs / workspaces (default: 20)"
-    echo "  --users NUM                Override Locust users (default: max(5, MAX_CONCURRENT_RUNS))"
+    echo "  --users NUM                Override Locust users (default: MAX_CONCURRENT_RUNS, 1:1)"
     echo "  --spawn-rate NUM           Override spawn rate (default: MAX_CONCURRENT_RUNS)"
     echo "  --run-time TIME            Test duration, e.g. 5m, 15m (default: 5m)"
     echo "  --host HOSTNAME            Override TFE hostname"
@@ -154,21 +154,20 @@ if [ -n "$HOST_OVERRIDE" ]; then
     TFE_HOSTNAME="$HOST_OVERRIDE"
 fi
 
-# Apply explicit overrides, otherwise auto-calc from MAX_CONCURRENT_RUNS
+# Apply explicit CLI overrides, otherwise always derive from MAX_CONCURRENT_RUNS
+# (do not defer to LOCUST_USERS / LOCUST_SPAWN_RATE from .env — keep 1:1 scaling)
 if [ -n "$USERS_OVERRIDE" ]; then
     LOCUST_USERS="$USERS_OVERRIDE"
-elif [ -z "$LOCUST_USERS" ]; then
-    # Formula: users = max(5, max_concurrent_runs)
-    LOCUST_USERS=$((MAX_CONCURRENT_RUNS > 5 ? MAX_CONCURRENT_RUNS : 5))
-    echo -e "${GREEN}Auto-calculated users: $LOCUST_USERS (based on max_concurrent_runs=$MAX_CONCURRENT_RUNS)${NC}"
+else
+    LOCUST_USERS=$MAX_CONCURRENT_RUNS
+    echo -e "${GREEN}Auto-calculated users: $LOCUST_USERS (1:1 with max_concurrent_runs=$MAX_CONCURRENT_RUNS)${NC}"
 fi
 
 if [ -n "$SPAWN_RATE_OVERRIDE" ]; then
     LOCUST_SPAWN_RATE="$SPAWN_RATE_OVERRIDE"
-elif [ -z "$LOCUST_SPAWN_RATE" ]; then
-    # Formula: spawn_rate = max_concurrent_runs (instant spawn)
+else
     LOCUST_SPAWN_RATE=$MAX_CONCURRENT_RUNS
-    echo -e "${GREEN}Auto-calculated spawn_rate: $LOCUST_SPAWN_RATE/s (instant spawn)${NC}"
+    echo -e "${GREEN}Auto-calculated spawn_rate: $LOCUST_SPAWN_RATE/s (1:1 with max_concurrent_runs)${NC}"
 fi
 
 # Export so Locust event hooks can read them

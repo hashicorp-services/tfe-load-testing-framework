@@ -38,6 +38,17 @@ import urllib3
 if os.getenv('TFE_VERIFY_SSL', 'true').lower() == 'false':
     urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
+# Run statuses that mean the workspace is free for a new run.
+# current-run often remains set after completion, so we must check status.
+TERMINAL_RUN_STATUSES = frozenset({
+    "applied",
+    "planned_and_finished",
+    "errored",
+    "canceled",
+    "discarded",
+    "force_canceled",
+})
+
 
 class TFEWorkspaceRunUser(HttpUser):
     """
@@ -149,6 +160,82 @@ output "timestamp" {{
 
         return tar_buffer.getvalue()
 
+    def _workspace_has_active_run(self):
+        """
+        Return True if the workspace is locked or has a non-terminal current run.
+
+        current-run often remains set after a run finishes, so a non-null
+        relationship alone is not treated as busy — status must be checked.
+        Raises RescheduleTask on rate limits; returns True on check failures
+        (conservative: avoid creating another run when state is unknown).
+        """
+        with self.client.get(
+            f"/api/v2/workspaces/{self.workspace_id}",
+            headers={
+                "Authorization": f"Bearer {self.tfe.token}",
+                "Content-Type": "application/vnd.api+json"
+            },
+            verify=self.tfe.verify_ssl,
+            catch_response=True,
+            name="/api/v2/workspaces/:id [LOCK-CHECK]"
+        ) as ws_response:
+            if ws_response.status_code == 429:
+                retry_after = int(ws_response.headers.get("Retry-After", 5))
+                print(f"Rate limited (429) checking workspace lock, backing off {retry_after}s")
+                time.sleep(retry_after)
+                raise RescheduleTask()
+            elif ws_response.status_code != 200:
+                ws_response.failure(f"Failed to check workspace lock status: {ws_response.status_code}")
+                return True
+
+            ws_data = ws_response.json()
+            is_locked = ws_data['data']['attributes']['locked']
+            current_run = ws_data['data']['relationships'].get('current-run', {}).get('data')
+            ws_response.success()
+
+            if is_locked:
+                print(f"Workspace {self.workspace_name} is locked, deferring run creation")
+                return True
+
+            if not current_run:
+                return False
+
+            current_run_id = current_run.get('id')
+            if not current_run_id:
+                return False
+
+        # Fetch run status — current-run stays set after terminal completion
+        with self.client.get(
+            f"/api/v2/runs/{current_run_id}",
+            headers={
+                "Authorization": f"Bearer {self.tfe.token}",
+                "Content-Type": "application/vnd.api+json"
+            },
+            verify=self.tfe.verify_ssl,
+            catch_response=True,
+            name="/api/v2/runs/:id [ACTIVE-CHECK]"
+        ) as run_response:
+            if run_response.status_code == 429:
+                retry_after = int(run_response.headers.get("Retry-After", 5))
+                print(f"Rate limited (429) checking current run status, backing off {retry_after}s")
+                time.sleep(retry_after)
+                raise RescheduleTask()
+            elif run_response.status_code != 200:
+                run_response.failure(f"Failed to check current run status: {run_response.status_code}")
+                return True
+
+            status = run_response.json()['data']['attributes']['status']
+            run_response.success()
+
+            if status not in TERMINAL_RUN_STATUSES:
+                print(
+                    f"Workspace {self.workspace_name} has non-terminal run "
+                    f"{current_run_id} ({status}), deferring run creation"
+                )
+                return True
+
+        return False
+
     @task
     def create_and_trigger_run(self):
         """
@@ -157,6 +244,10 @@ output "timestamp" {{
         """
         run_id = None
         try:
+            # Gate before config upload/create so we do not pile work onto a busy workspace
+            if self._workspace_has_active_run():
+                raise RescheduleTask()
+
             # Create configuration version using Locust client for metrics
             with self.client.post(
                 f"/api/v2/workspaces/{self.workspace_id}/configuration-versions",
@@ -226,13 +317,28 @@ output "timestamp" {{
                     if cv_response.status_code == 200:
                         cv_data = cv_response.json()
                         status = cv_data['data']['attributes']['status']
-                        cv_response.success()
                         if status == 'uploaded':
+                            cv_response.success()
                             config_uploaded = True
                             break
                         elif status == 'errored':
+                            cv_response.failure(
+                                f"Config version {config_version_id} status is errored"
+                            )
                             print(f"Config version {config_version_id} errored")
                             return
+                        elif i == max_retries - 1:
+                            cv_response.failure(
+                                f"Config version {config_version_id} not uploaded "
+                                f"after {max_retries} retries (status={status})"
+                            )
+                            print(
+                                f"Config version {config_version_id} not uploaded after "
+                                f"{max_retries} retries, skipping run creation"
+                            )
+                            return
+                        else:
+                            cv_response.success()
                     elif cv_response.status_code == 429:
                         retry_after = int(cv_response.headers.get("Retry-After", 5))
                         print(f"Rate limited (429) checking config version status, backing off {retry_after}s")
@@ -243,46 +349,12 @@ output "timestamp" {{
                         return
                 time.sleep(0.5)
 
-            # Verify config version is uploaded before creating run
             if not config_uploaded:
-                print(f"Config version {config_version_id} not uploaded after {max_retries} retries, skipping run creation")
                 return
 
-            # Check workspace status and current run before creating new run
-            with self.client.get(
-                f"/api/v2/workspaces/{self.workspace_id}",
-                headers={
-                    "Authorization": f"Bearer {self.tfe.token}",
-                    "Content-Type": "application/vnd.api+json"
-                },
-                verify=self.tfe.verify_ssl,
-                catch_response=True,
-                name="/api/v2/workspaces/:id [LOCK-CHECK]"
-            ) as ws_response:
-                if ws_response.status_code == 200:
-                    ws_data = ws_response.json()
-                    is_locked = ws_data['data']['attributes']['locked']
-
-                    # Check if there's a current run
-                    current_run = ws_data['data']['relationships'].get('current-run', {}).get('data')
-                    ws_response.success()
-
-                    if is_locked:
-                        print(f"Workspace {self.workspace_name} is locked, skipping run creation")
-                        return
-
-                    # If there's a current run, wait a bit before creating a new one
-                    if current_run:
-                        print(f"Workspace {self.workspace_name} has active run, waiting before creating new run")
-                        time.sleep(2)
-                elif ws_response.status_code == 429:
-                    retry_after = int(ws_response.headers.get("Retry-After", 5))
-                    print(f"Rate limited (429) checking workspace lock, backing off {retry_after}s")
-                    time.sleep(retry_after)
-                    raise RescheduleTask()
-                else:
-                    ws_response.failure(f"Failed to check workspace lock status: {ws_response.status_code}")
-                    return
+            # Re-check lock / active run immediately before POST /runs
+            if self._workspace_has_active_run():
+                raise RescheduleTask()
 
             # Create a run (plan) using Locust client
             with self.client.post(
